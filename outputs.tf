@@ -40,6 +40,6 @@ output "oci_swarm_basic_source_code" {
 }
 
 output "pangolin_token" {
-  value     = var.pangolin_token
+  value     = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
   sensitive = true
 }

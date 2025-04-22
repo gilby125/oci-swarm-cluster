@@ -57,6 +57,13 @@ use_only_always_free_elegible_resources = true
 deploy_database = true
 deploy_web_app = true
 
+# Cloudflare and Pangolin Configuration
+# cloudflare_email = "your-email@example.com"
+# cloudflare_api_token = "your-cloudflare-api-token"
+# domain_name = "yourdomain.com"
+# Pangolin token will be automatically generated if not provided
+# pangolin_token = "" # Uncomment and set this if you want to use a specific token
+
 # Object Storage
 object_storage_oci_swarm_media_compartment_ocid = "" # e.g.: "ocid1.tenancy.oc1....."
 object_storage_oci_swarm_media_visibility       = "Public"

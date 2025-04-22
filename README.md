@@ -73,6 +73,15 @@ To enable Cloudflare integration for DNS management and SSL certificates:
 
 This integration enables automatic DNS configuration and SSL certificate generation for your domain.
 
+### Pangolin Integration
+
+Pangolin is used to create a secure tunnel to expose your local services to the internet. The Pangolin token is automatically generated if not provided. If you want to use a specific token:
+
+1. Uncomment the `pangolin_token` line in your terraform.tfvars file
+2. Set it to your desired token value
+
+The generated or provided token will be used to authenticate your Pangolin instance with the Pangolin service.
+
 [oci]: https://cloud.oracle.com/en_US/cloud-infrastructure
 [orm]: https://docs.cloud.oracle.com/iaas/Content/ResourceManager/Concepts/resourcemanager.htm
 [tf]: https://www.terraform.io

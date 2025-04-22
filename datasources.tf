@@ -49,6 +49,14 @@ resource "random_string" "catalogue_db_password" {
   override_special = "{}#^*<>[]%~"
 }
 
+resource "random_string" "pangolin_token" {
+  length           = 32
+  special          = false
+  min_upper        = 8
+  min_lower        = 8
+  min_numeric      = 8
+}
+
 resource "oci_database_autonomous_database_wallet" "autonomous_database_wallet" {
   count                  = var.deploy_database ? 1 : 0
   autonomous_database_id = oci_database_autonomous_database.oci_swarm_autonomous_database[0].id
@@ -142,7 +150,7 @@ data "template_file" "cloud_init" {
     # Cloudflare and Pangolin variables
     cloudflare_email               = var.cloudflare_email
     cloudflare_api_token           = var.cloudflare_api_token
-    pangolin_token                 = var.pangolin_token
+    pangolin_token                 = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
     domain_name                    = var.domain_name
     # Deployment options
     deploy_database                = var.deploy_database ? "true" : "false"
@@ -185,7 +193,7 @@ data "template_file" "docker_compose_template" {
   vars = {
     cloudflare_email    = var.cloudflare_email
     cloudflare_api_token = var.cloudflare_api_token
-    pangolin_token      = var.pangolin_token
+    pangolin_token      = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
     domain_name         = var.domain_name
     deploy_id           = random_string.deploy_id.result
   }

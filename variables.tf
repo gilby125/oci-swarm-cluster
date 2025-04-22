@@ -187,7 +187,8 @@ variable "cloudflare_api_token" {
 
 variable "pangolin_token" {
   type        = string
-  description = "Pangolin access token"
+  description = "Pangolin access token. If left empty, a random token will be generated."
+  default     = ""
   sensitive   = true
 }
 
