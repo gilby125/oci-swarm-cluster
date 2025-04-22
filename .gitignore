@@ -1,0 +1,24 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+terraform.tfvars
+.terraform.lock.hcl
+*.auto.tfvars
+
+# Secrets
+secrets.tfvars
+*.pem
+.env
+swarm.env
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Local development
+.vscode/
+.idea/

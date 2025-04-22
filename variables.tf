@@ -160,3 +160,25 @@ variable "object_storage_oci_swarm_media_visibility" {
 variable "services_in_mock_mode" {
   default = "carts,orders,users"
 }
+
+variable "cloudflare_email" {
+  type        = string
+  description = "Cloudflare account email"
+}
+
+variable "cloudflare_api_token" {
+  type        = string
+  description = "Cloudflare API token"
+  sensitive   = true
+}
+
+variable "pangolin_token" {
+  type        = string
+  description = "Pangolin access token"
+  sensitive   = true
+}
+
+variable "domain_name" {
+  type        = string
+  description = "Your domain name"
+}
