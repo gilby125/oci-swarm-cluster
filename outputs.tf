@@ -36,7 +36,7 @@ output "deployed_to_region" {
 }
 
 output "oci_swarm_basic_source_code" {
-  value = "https://github.com/marcelo-ochoa/oci-swarm-cluster"
+  value = "https://github.com/gilby125/oci-swarm-cluster"
 }
 
 output "pangolin_token" {
