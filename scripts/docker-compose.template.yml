@@ -31,10 +31,15 @@ services:
                 - traefik.docker.network=lb_network
                 - traefik.constraint-label=traefik-public
                 - traefik.http.routers.registry.rule=(Host(`registry.${domain_name}`) && PathPrefix(`/v2/`))
+                - traefik.http.routers.registry-v2.rule=(Host(`v2.registry.${domain_name}`) && PathPrefix(`/v2/`))
                 - traefik.http.routers.registry.entrypoints=https
                 - traefik.http.routers.registry.tls=true
                 - traefik.http.routers.registry.tls.certresolver=cloudflare
+                - traefik.http.routers.registry-v2.entrypoints=https
+                - traefik.http.routers.registry-v2.tls=true
+                - traefik.http.routers.registry-v2.tls.certresolver=cloudflare
                 - traefik.http.services.registry.loadbalancer.server.port=5000
+                - traefik.http.services.registry-v2.loadbalancer.server.port=5000
 
     agent:
         image: portainer/agent
@@ -71,10 +76,15 @@ services:
                 - traefik.docker.network=lb_network
                 - traefik.constraint-label=traefik-public
                 - traefik.http.routers.portainer.rule=(Host(`dev-oci.${domain_name}`) && PathPrefix(`/`))
+                - traefik.http.routers.portainer-v2-11-1.rule=(Host(`v2-11-1.dev-oci.${domain_name}`) && PathPrefix(`/`))
                 - traefik.http.routers.portainer.entrypoints=https
                 - traefik.http.routers.portainer.tls=true
                 - traefik.http.routers.portainer.tls.certresolver=cloudflare
+                - traefik.http.routers.portainer-v2-11-1.entrypoints=https
+                - traefik.http.routers.portainer-v2-11-1.tls=true
+                - traefik.http.routers.portainer-v2-11-1.tls.certresolver=cloudflare
                 - traefik.http.services.portainer.loadbalancer.server.port=9000
+                - traefik.http.services.portainer-v2-11-1.loadbalancer.server.port=9000
 
     traefik:
         image: traefik:v2.6.1
@@ -141,10 +151,15 @@ services:
                 - traefik.enable=true
                 - traefik.docker.network=lb_network
                 - traefik.http.routers.localproxy.rule=Host(`local.${domain_name}`)
+                - traefik.http.routers.localproxy-alpine.rule=Host(`alpine.local.${domain_name}`)
                 - traefik.http.routers.localproxy.entrypoints=https
                 - traefik.http.routers.localproxy.tls=true
                 - traefik.http.routers.localproxy.tls.certresolver=cloudflare
+                - traefik.http.routers.localproxy-alpine.entrypoints=https
+                - traefik.http.routers.localproxy-alpine.tls=true
+                - traefik.http.routers.localproxy-alpine.tls.certresolver=cloudflare
                 - traefik.http.services.localproxy.loadbalancer.server.port=80
+                - traefik.http.services.localproxy-alpine.loadbalancer.server.port=80
         volumes:
             - ./nginx.conf:/etc/nginx/nginx.conf:ro
 

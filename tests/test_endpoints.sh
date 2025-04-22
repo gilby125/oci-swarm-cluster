@@ -30,7 +30,7 @@ echo -e "${YELLOW}Load Balancer IP: ${LB_IP}${NC}"
 test_dns() {
   local domain=$1
   echo -e "\n${YELLOW}Testing DNS resolution for ${domain}...${NC}"
-  
+
   # Try to resolve the domain using dig
   if command -v dig &> /dev/null; then
     dig +short $domain
@@ -63,9 +63,9 @@ test_http() {
   local expected_status=$2
   local method=${3:-GET}
   local data=${4:-""}
-  
+
   echo -e "\n${YELLOW}Testing HTTP connectivity to ${url}...${NC}"
-  
+
   # Try to connect to the URL using curl
   if command -v curl &> /dev/null; then
     if [ "$method" = "POST" ]; then
@@ -73,7 +73,7 @@ test_http() {
     else
       response=$(curl -s -o /dev/null -w "%{http_code}" "$url")
     fi
-    
+
     if [ "$response" = "$expected_status" ]; then
       echo -e "${GREEN}HTTP connectivity successful for ${url} (Status: ${response})${NC}"
       return 0
@@ -99,9 +99,9 @@ test_http() {
 # Function to test HTTPS connectivity with certificate validation
 test_https_cert() {
   local domain=$1
-  
+
   echo -e "\n${YELLOW}Testing HTTPS certificate for ${domain}...${NC}"
-  
+
   # Try to check the certificate using openssl
   if command -v openssl &> /dev/null; then
     echo | openssl s_client -servername $domain -connect $domain:443 2>/dev/null | openssl x509 -noout -dates
@@ -141,6 +141,11 @@ test_http "https://registry.${DOMAIN}/v2/" 200
 
 # Test HTTPS connectivity to the Local Proxy
 test_http "https://local.${DOMAIN}" 200
+
+# Test HTTPS connectivity to the Pangolin admin interface
+echo -e "\n${YELLOW}Testing HTTP connectivity to the Pangolin admin interface...${NC}"
+echo -e "${YELLOW}Note: This will return a 401 Unauthorized if the admin interface is working correctly${NC}"
+test_http "https://admin.pangolin.${DOMAIN}" 401
 
 # Test HTTPS certificates
 test_https_cert "dev-oci.${DOMAIN}"

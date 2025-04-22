@@ -73,6 +73,25 @@ To enable Cloudflare integration for DNS management and SSL certificates:
 
 This integration enables automatic DNS configuration and SSL certificate generation for your domain.
 
+#### Automated DNS Management
+
+The deployment includes automated DNS management through Terraform:
+
+1. DNS records for all services are automatically created in Cloudflare
+2. SSL certificates are automatically obtained through Let's Encrypt
+3. Version-specific subdomains are created for each service (e.g., `v2-11-1.dev-oci.yourdomain.com`)
+
+To set up DNS and certificates in one step, run:
+
+```bash
+./setup_dns_and_certs.sh
+```
+
+This script will:
+1. Apply the Terraform configuration with flexible SSL initially
+2. Wait for certificate issuance
+3. Update the SSL setting to full_strict for maximum security
+
 ### Pangolin Integration
 
 Pangolin is used to create a secure tunnel to expose your local services to the internet. The Pangolin token is automatically generated if not provided. If you want to use a specific token:
@@ -81,6 +100,27 @@ Pangolin is used to create a secure tunnel to expose your local services to the 
 2. Set it to your desired token value
 
 The generated or provided token will be used to authenticate your Pangolin instance with the Pangolin service.
+
+You can access the Pangolin admin interface at `https://admin.pangolin.<your-domain>` using the username `admin` and your Pangolin token as the password.
+
+## Testing Your Deployment
+
+After deploying the infrastructure with Terraform, you can verify that all endpoints are working correctly using the provided test scripts:
+
+- **Basic Test Script**: `tests/test_endpoints.sh` - Performs basic tests to verify DNS resolution, HTTP/HTTPS connectivity, and SSL certificates
+- **Comprehensive Verification Script**: `tests/verify_deployment.sh` - Provides a more thorough verification including Docker Swarm services and Cloudflare integration
+
+To run the tests:
+
+```bash
+# Basic tests
+./tests/test_endpoints.sh
+
+# Comprehensive verification
+./tests/verify_deployment.sh
+```
+
+See [TESTING.md](TESTING.md) for detailed information about the test scripts and troubleshooting tips.
 
 [oci]: https://cloud.oracle.com/en_US/cloud-infrastructure
 [orm]: https://docs.cloud.oracle.com/iaas/Content/ResourceManager/Concepts/resourcemanager.htm
