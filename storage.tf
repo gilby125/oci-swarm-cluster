@@ -1,6 +1,6 @@
 # Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
 # Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
-# 
+#
 
 resource "oci_objectstorage_bucket" "swarm" {
   compartment_id = var.compartment_ocid
@@ -12,18 +12,20 @@ resource "oci_objectstorage_bucket" "swarm" {
 }
 
 resource "oci_objectstorage_object" "oci_swarm_wallet" {
+  count     = var.deploy_database ? 1 : 0
   bucket    = oci_objectstorage_bucket.swarm.name
-  content   = oci_database_autonomous_database_wallet.autonomous_database_wallet.content
+  content   = oci_database_autonomous_database_wallet.autonomous_database_wallet[0].content
   namespace = data.oci_objectstorage_namespace.user_namespace.namespace
   object    = "oci_swarm_atp_wallet"
 }
 resource "oci_objectstorage_preauthrequest" "oci_swarm_wallet_preauth" {
+  count       = var.deploy_database ? 1 : 0
   access_type  = "ObjectRead"
   bucket       = oci_objectstorage_bucket.swarm.name
   name         = "oci_swarm_wallet_preauth"
   namespace    = data.oci_objectstorage_namespace.user_namespace.namespace
   time_expires = timeadd(timestamp(), "30m")
-  object_name  = oci_objectstorage_object.oci_swarm_wallet.object
+  object_name  = oci_objectstorage_object.oci_swarm_wallet[0].object
 }
 
 # Static assets bucket

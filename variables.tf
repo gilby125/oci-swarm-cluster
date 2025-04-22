@@ -1,6 +1,6 @@
 # Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
 # Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
-# 
+#
 
 variable "tenancy_ocid" {}
 variable "region" {}
@@ -154,6 +154,19 @@ variable "object_storage_oci_swarm_media_compartment_ocid" {
 }
 variable "object_storage_oci_swarm_media_visibility" {
   default = "Public"
+}
+
+# Deployment Options
+variable "deploy_database" {
+  description = "Whether to deploy the Autonomous Database"
+  type        = bool
+  default     = true
+}
+
+variable "deploy_web_app" {
+  description = "Whether to deploy the web application components"
+  type        = bool
+  default     = true
 }
 
 # OciSwarm Services

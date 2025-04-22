@@ -18,7 +18,7 @@ get_object() {
         if [ "$http_status" -eq "200" ]; then
             success=0
             echo "saved to $1"
-            break 
+            break
         else
              sleep 15
         fi
@@ -26,22 +26,27 @@ get_object() {
     return $success
 }
 
-# get artifacts from object storage
-get_object /root/wallet.64 ${wallet_par}
-# Setup ATP wallet files
-base64 --decode /root/wallet.64 > /root/wallet.zip
-unzip /root/wallet.zip -d /usr/lib/oracle/${oracle_client_version}/client64/lib/network/admin/
+# get artifacts from object storage if database is deployed
+if [ "${wallet_par}" != "" ]; then
+  get_object /root/wallet.64 ${wallet_par}
+  # Setup ATP wallet files
+  base64 --decode /root/wallet.64 > /root/wallet.zip
+  unzip /root/wallet.zip -d /usr/lib/oracle/${oracle_client_version}/client64/lib/network/admin/
+  ln -s /usr/lib/oracle/${oracle_client_version}/client64/lib/network/admin /root/wallet
+fi
 
 source /root/swarm.env
 export $(cut -d= -f1 /root/swarm.env)
-ln -s /usr/lib/oracle/${oracle_client_version}/client64/lib/network/admin /root/wallet
+
+# Make sure Cloudflare and Pangolin variables are exported
+export YOUR_EMAIL PANGOLIN_TOKEN YOUR_DOMAIN YOUR_CF_API_TOKEN
 docker plugin set s3fs AWSACCESSKEYID=$AWSACCESSKEYID
 docker plugin set s3fs AWSSECRETACCESSKEY="$AWSSECRETACCESSKEY"
 docker plugin set s3fs DEFAULT_S3FSOPTS="nomultipart,use_path_request_style,url=https://$OBJECT_NAMESPACE.compat.objectstorage.$REGION_ID.oraclecloud.com/"
 docker plugin enable s3fs
 
-# Init DB
-if [[ $(echo $(hostname) | grep "\-0$") ]]; then
+# Init DB if database is deployed
+if [ "${db_name}" != "" ] && [[ $(echo $(hostname) | grep "\-0$") ]]; then
     sqlplus ADMIN/"${atp_pw}"@${db_name}_tp @/root/catalogue.sql
 fi
 
@@ -71,5 +76,11 @@ docker run -d --name fail2ban \
 if [[ $(echo $(hostname) | grep "\-1$") ]]; then
     docker network create -d overlay lb_network
     docker network create -d overlay agent_network
-    docker stack deploy -c /root/docker-compose.yml swarm
+
+    # Pre-process the Docker Compose file to ensure variables are properly substituted
+    echo "Pre-processing Docker Compose file to substitute variables..."
+    envsubst < /root/docker-compose.yml > /root/docker-compose.processed.yml
+
+    # Deploy the stack with the processed file
+    docker stack deploy -c /root/docker-compose.processed.yml swarm
 fi

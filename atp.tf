@@ -1,9 +1,10 @@
 # Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
 # Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
-# 
+#
 
 # creates an ATP database
 resource "oci_database_autonomous_database" "oci_swarm_autonomous_database" {
+  count                    = var.deploy_database ? 1 : 0
   admin_password           = random_string.autonomous_database_admin_password.result
   compartment_id           = var.compartment_ocid
   cpu_core_count           = var.autonomous_database_cpu_core_count

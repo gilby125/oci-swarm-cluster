@@ -1,6 +1,6 @@
 # Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
 # Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
-# 
+#
 
 # Gets a list of Availability Domains
 data "oci_identity_availability_domains" "ADs" {
@@ -50,7 +50,8 @@ resource "random_string" "catalogue_db_password" {
 }
 
 resource "oci_database_autonomous_database_wallet" "autonomous_database_wallet" {
-  autonomous_database_id = oci_database_autonomous_database.oci_swarm_autonomous_database.id
+  count                  = var.deploy_database ? 1 : 0
+  autonomous_database_id = oci_database_autonomous_database.oci_swarm_autonomous_database[0].id
   password               = random_string.autonomous_database_wallet_password.result
   base64_encode_content  = "true"
 }
@@ -127,7 +128,7 @@ data "template_file" "cloud_init" {
     setup_template_sh_content      = base64gzip(data.template_file.setup_template.rendered)
     deploy_template_content        = base64gzip(data.template_file.deploy_template.rendered)
     catalogue_sql_template_content = base64gzip(data.template_file.catalogue_sql_template.rendered)
-    docker_compose_yml_content     = base64gzip(data.local_file.docker_compose_yml.content)
+    docker_compose_yml_content     = base64gzip(data.template_file.docker_compose_template.rendered)
     catalogue_password             = random_string.catalogue_db_password.result
     catalogue_port                 = local.catalogue_port
     mock_mode                      = var.services_in_mock_mode
@@ -136,8 +137,16 @@ data "template_file" "cloud_init" {
     s3_secret                      = oci_identity_customer_secret_key.oci_user.key
     s3_key_id                      = oci_identity_customer_secret_key.oci_user.id
     object_namespace               = oci_objectstorage_bucket.registry.namespace
-    db_name                        = oci_database_autonomous_database.oci_swarm_autonomous_database.db_name
+    db_name                        = var.deploy_database ? oci_database_autonomous_database.oci_swarm_autonomous_database[0].db_name : ""
     assets_url                     = var.object_storage_oci_swarm_media_visibility == "Private" ? "" : "https://objectstorage.${var.region}.oraclecloud.com/n/${oci_objectstorage_bucket.oci_swarm_media.namespace}/b/${oci_objectstorage_bucket.oci_swarm_media.name}/o/"
+    # Cloudflare and Pangolin variables
+    cloudflare_email               = var.cloudflare_email
+    cloudflare_api_token           = var.cloudflare_api_token
+    pangolin_token                 = var.pangolin_token
+    domain_name                    = var.domain_name
+    # Deployment options
+    deploy_database                = var.deploy_database ? "true" : "false"
+    deploy_web_app                 = var.deploy_web_app ? "true" : "false"
   }
 }
 data "template_file" "setup_preflight" {
@@ -157,10 +166,10 @@ data "template_file" "deploy_template" {
 
   vars = {
     oracle_client_version   = var.oracle_client_version
-    db_name                 = oci_database_autonomous_database.oci_swarm_autonomous_database.db_name
+    db_name                 = var.deploy_database ? oci_database_autonomous_database.oci_swarm_autonomous_database[0].db_name : ""
     atp_pw                  = random_string.autonomous_database_admin_password.result
     oci_swarm_media_visibility = var.object_storage_oci_swarm_media_visibility
-    wallet_par              = "https://objectstorage.${var.region}.oraclecloud.com${oci_objectstorage_preauthrequest.oci_swarm_wallet_preauth.access_uri}"
+    wallet_par              = var.deploy_database ? "https://objectstorage.${var.region}.oraclecloud.com${oci_objectstorage_preauthrequest.oci_swarm_wallet_preauth[0].access_uri}" : ""
   }
 }
 data "template_file" "catalogue_sql_template" {
@@ -170,8 +179,16 @@ data "template_file" "catalogue_sql_template" {
     catalogue_password = random_string.catalogue_db_password.result
   }
 }
-data "local_file" "docker_compose_yml" {
-  filename = "${path.module}/scripts/docker-compose.yml"
+data "template_file" "docker_compose_template" {
+  template = file("${path.module}/scripts/docker-compose.template.yml")
+
+  vars = {
+    cloudflare_email    = var.cloudflare_email
+    cloudflare_api_token = var.cloudflare_api_token
+    pangolin_token      = var.pangolin_token
+    domain_name         = var.domain_name
+    deploy_id           = random_string.deploy_id.result
+  }
 }
 locals {
   catalogue_port = 3005

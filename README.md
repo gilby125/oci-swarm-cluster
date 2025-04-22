@@ -2,7 +2,7 @@
 
 This is a Terraform configuration that deploys a two node Swarm cluster on [Oracle Cloud Infrastructure (OCI)][oci].
 
-It also included an HA storage implemented in GlusterFS and docker plugins for Gluster FS and Oracle Object Storage.
+It also includes an HA storage implemented in GlusterFS and docker plugins for Gluster FS and Oracle Object Storage.
 
 ## Topology
 
@@ -15,7 +15,7 @@ The application uses a typical topology for a 3-tier web application as follows
 | Component             | What                                                                                                           | Why                                                                                                                                                                                                                                    | Learn                 |
 | --------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | Compute Instances     | 2 Always Free tier eligible compute instance                                                              | These VMs host the application                                                                                                                                                                                                         | [Learn More][inst]    |
-| Autonomous Database   | 1 Always Free tier eligible Autonomous Database instance                                                       | The database used by the application                                                                                                                                                                                                   | [Learn More][adb]     |
+| Autonomous Database   | 1 Always Free tier eligible Autonomous Database instance (Optional)                                                      | The database used by the application. Can be disabled at apply time.                                                                                                                                                                                                  | [Learn More][adb]     |
 | Vault                 | Optional use of OCI Vault keys for Key Management (KMS).       | Encrypt boot volumes of the compute instances and Object Storage buckets.                                             | [Learn More][kms] |
 | Load Balancer         | 1 Always Free tier eligible load balancer                                                                      | Routes traffic between the nodes hosting the application                                                                                                                                                                               | [Learn More][lb]      |
 | Virtual Cloud Network | This resource provides a virtual network in the cloud                                                          | The virtual network used by the application to host all its networking components                                                                                                                                                      | [Learn More][vcn]     |
@@ -26,6 +26,7 @@ The application uses a typical topology for a 3-tier web application as follows
 | Service Gateway       | (Not available on Always-free only) A virtual router that enables private traffic to OCI services from a VCN                                       | Provides a path for private network traffic between your VCN and services like Object Storage or ATP.                                                                                                                                  | [Learn More][svcgw]   |
 | Route Tables          | Route tables route traffic that leaves the VCN.                                                                | The public subnet route rules direct traffic to use the Internet Gateway, while the private subnet route rules enable the compute instances to reach the internet through the NAT gateway and OCI services through the service gateway | [Learn More][rt]      |
 | Security Lists        | Security Lists act like a firewall with the rules determining what type of traffic is allowed in or out.       | Security rules enable HTTP traffic to the LoadBalancer from anywhere. Also enables are HTTP and SSH traffic to the compute instances, but only from the subnet where the load balancer is.                                             | [Learn More][seclist] |
+| Cloudflare Integration | Integration with Cloudflare for DNS management and SSL certificates | Enables automatic DNS configuration and SSL certificate generation for your domains using Cloudflare | [Learn More][cloudflare] |
 
 ## Using local or CloudShell terraform
 
@@ -33,6 +34,8 @@ Clone <https://github.com/marcelo-ochoa/oci-swarm-cluster>
 
 - Rename the file `terraform.tfvars.example` to `terraform.tfvars`
 - Change the credentials variables to your user and any other desirable variables
+- Set the `cloudflare_email` and `cloudflare_api_token` variables if you want to use Cloudflare integration
+- Optionally set `deploy_database=false` or `deploy_web_app=false` to disable those components
 - Run `terraform init` to init the terraform providers
 - Run `terraform apply` to create the resources on OCI
 
@@ -49,6 +52,27 @@ Clone <https://github.com/marcelo-ochoa/oci-swarm-cluster>
 - Go into directory oci-swarm-cluster and zip it using "zip -r ../oci-swarm-cluster.zip *"
 - Upload oci-swarm-cluster.zip on using OCI Resource Manager pane
 
+## Configuration Options
+
+### Optional Components
+
+This stack allows you to selectively deploy components:
+
+- **Database Deployment**: Set `deploy_database=false` to skip deploying the Autonomous Database
+- **Web Application Deployment**: Set `deploy_web_app=false` to skip deploying the web application components
+
+These options can be set in your terraform.tfvars file or passed as command-line variables.
+
+### Cloudflare Integration
+
+To enable Cloudflare integration for DNS management and SSL certificates:
+
+1. Set `cloudflare_email` to your Cloudflare account email
+2. Set `cloudflare_api_token` to your Cloudflare API token with appropriate permissions
+3. Set `domain_name` to your domain managed by Cloudflare
+
+This integration enables automatic DNS configuration and SSL certificate generation for your domain.
+
 [oci]: https://cloud.oracle.com/en_US/cloud-infrastructure
 [orm]: https://docs.cloud.oracle.com/iaas/Content/ResourceManager/Concepts/resourcemanager.htm
 [tf]: https://www.terraform.io
@@ -63,5 +87,6 @@ Clone <https://github.com/marcelo-ochoa/oci-swarm-cluster>
 [adb]: https://docs.cloud.oracle.com/iaas/Content/Database/Concepts/adboverview.htm
 [inst]: https://docs.cloud.oracle.com/iaas/Content/Compute/Concepts/computeoverview.htm
 [kms]: https://docs.cloud.oracle.com/en-us/iaas/Content/KeyManagement/Concepts/keyoverview.htm
+[cloudflare]: https://developers.cloudflare.com/fundamentals/get-started/
 [magic_button]: https://oci-resourcemanager-plugin.plugins.oci.oraclecloud.com/latest/deploy-to-oracle-cloud.svg
 [magic_oci_swarm_basic_stack]: https://console.us-ashburn-1.oraclecloud.com/resourcemanager/stacks/create?region=home&zipUrl=https://github.com/oracle-quickstart/oci-cloudnative/releases/latest/download/oci-swarm-basic-stack-latest.zip

@@ -1,6 +1,6 @@
 # Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
 # Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
-# 
+#
 
 title: "Three-tier web application using Always-Free resources"
 description: "A demo eCommerce example app (OciSwarm Basic) using Always-Free Oracle Cloud Infrastructure"
@@ -46,6 +46,8 @@ groupings:
   - title: "Advanced Resource Options"
     variables:
     - use_only_always_free_elegible_resources
+    - deploy_database
+    - deploy_web_app
 
   - title: "Advanced Resource Options - Load Balancer"
     variables:
@@ -238,6 +240,24 @@ variables:
       and:
         - show_advanced
 
+  deploy_database:
+    type: boolean
+    title: "Deploy Autonomous Database?"
+    description: "When checked, this stack will deploy an Autonomous Database. Uncheck to skip database deployment."
+    default: true
+    visible:
+      and:
+        - show_advanced
+
+  deploy_web_app:
+    type: boolean
+    title: "Deploy Web Application?"
+    description: "When checked, this stack will deploy the web application components. Uncheck to skip web app deployment."
+    default: true
+    visible:
+      and:
+        - show_advanced
+
   lb_shape:
     type: enum
     enum:
@@ -354,7 +374,7 @@ variables:
           - show_advanced
         - not:
           - use_only_always_free_elegible_resources
-  
+
   autonomous_database_is_free_tier:
     type: boolean
     title: "Use always free Autonomous Database?"
@@ -434,13 +454,13 @@ outputs:
     type: link
     title: Open
     visible: true
-  
+
   autonomous_database_password:
     type: string
     title: "Database Admin Password"
     displayText: "Autonomous Database Admin Password"
     visible: true
-  
+
   generated_private_key_pem:
     type: string
     title: "Generated Private Key for SSH Access"
@@ -451,7 +471,7 @@ outputs:
     type: string
     title: "Message"
     visible: true
-  
+
   deploy_id:
     type: string
     title: "Deployment Id"
@@ -472,5 +492,5 @@ outputs:
     title: "Comments"
     displayText: "The application URL will be unavailable for a few minutes after provisioning, while the application is configured"
     visible: true
-  
+
 primaryOutputButton: ${lb_public_url}

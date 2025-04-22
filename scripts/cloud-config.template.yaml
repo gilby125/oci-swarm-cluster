@@ -43,6 +43,14 @@ write_files:
       OBJECT_NAMESPACE=${object_namespace}
       AWSSECRETACCESSKEY=${s3_secret}
       AWSACCESSKEYID=${s3_key_id}
+      # Cloudflare and Pangolin variables
+      YOUR_EMAIL=${cloudflare_email}
+      YOUR_CF_API_TOKEN=${cloudflare_api_token}
+      PANGOLIN_TOKEN=${pangolin_token}
+      YOUR_DOMAIN=${domain_name}
+      # Deployment options
+      DEPLOY_DATABASE=${deploy_database}
+      DEPLOY_WEB_APP=${deploy_web_app}
 
 runcmd:
  - echo "Running prep scripts..."

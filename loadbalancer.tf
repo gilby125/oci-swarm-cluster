@@ -1,6 +1,6 @@
 # Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
 # Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
-# 
+#
 
 resource "oci_load_balancer_load_balancer" "oci_swarm_lb" {
   compartment_id = (var.lb_compartment_ocid != "") ? var.lb_compartment_ocid : var.compartment_ocid
@@ -44,7 +44,7 @@ resource "oci_load_balancer_backend" "oci-swarm-be" {
   offline          = false
   weight           = 1
 
-  count = var.num_nodes
+  count = var.deploy_web_app ? var.num_nodes : 0
 }
 
 resource "oci_load_balancer_backend_set" "oci_swarm_bes_ssl" {
@@ -74,7 +74,7 @@ resource "oci_load_balancer_backend" "oci-swarm-be_ssl" {
   offline          = false
   weight           = 1
 
-  count = (var.num_nodes > 2) ? 2 : var.num_nodes
+  count = var.deploy_web_app ? ((var.num_nodes > 2) ? 2 : var.num_nodes) : 0
 }
 
 resource "oci_load_balancer_listener" "oci_swarm_listener_80" {

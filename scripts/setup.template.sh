@@ -26,7 +26,7 @@ systemctl restart firewalld
 dnf clean metadata -y
 
 # Install tools
-dnf -y install unzip jq
+dnf -y install unzip jq gettext
 
 # Install Oracle Instant Client
 dnf -y install oracle-release-el8
