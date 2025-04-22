@@ -11,6 +11,17 @@ secrets.tfvars
 *.pem
 .env
 swarm.env
+.oci/
+~/.oci/
+**/oci/config
+**/oci/*.pem
+
+# Credentials and tokens
+*credentials*
+*credential*
+*token*
+*.key
+*.ppk
 
 # OS specific
 .DS_Store

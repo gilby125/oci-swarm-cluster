@@ -1,4 +1,4 @@
-# Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
+lets push this to my github account, sans secrets of corie# Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
 # Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
 # 
 
@@ -37,4 +37,9 @@ output "deployed_to_region" {
 
 output "oci_swarm_basic_source_code" {
   value = "https://github.com/marcelo-ochoa/oci-swarm-cluster"
+}
+
+output "pangolin_token" {
+  value     = random_string.pangolin_token.result
+  sensitive = true
 }

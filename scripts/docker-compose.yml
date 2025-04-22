@@ -92,10 +92,6 @@ services:
             placement:
                 constraints:
                     - node.role == manager
-            restart_policy:
-                condition: on-failure
-                max_attempts: 3
-                window: 120s
         volumes:
             - /var/run/docker.sock:/var/run/docker.sock:ro
             - /var/log/traefik:/var/log/traefik:rw
@@ -108,22 +104,49 @@ services:
             - --entrypoints.http.address=:80
             - --entrypoints.https.address=:443
             - --serversTransport.insecureSkipVerify=true
-            - --certificatesresolvers.le.acme.email=marcelo.ochoa@gmail.com
-            - --certificatesresolvers.le.acme.storage=/data/acme.json
-            - --certificatesresolvers.le.acme.tlschallenge=true
-            - --entryPoints.http.forwardedHeaders.trustedIPs=127.0.0.1/32,10.1.22.0/24
-            #- --entryPoints.https.forwardedHeaders.trustedIPs=127.0.0.1/32,129.144.0.0/12,129.144.0.0/12,129.213.0.0/16,130.35.0.0/16,132.145.0.0/16,134.70.0.0/16,138.1.0.0/16,140.204.0.0/16,140.91.0.0/16,147.154.0.0/16,192.157.18.0/23,192.29.0.0/16,192.69.118.0/23,198.181.48.0/21,199.195.6.0/23,205.147.88.0/21
-            #- --log.level=INFO
-            - --accesslog
-            - --api
-            - --log
-            - --log.filePath=/var/log/traefik/traefik.log
-            - --accesslog.filepath=/var/log/traefik/access.log
-            - --accesslog.filters.statuscodes=200-499
-            - --accesslog.filters.retryattempts
-            - --accesslog.filters.minduration=10ms
+            - --certificatesresolvers.cloudflare.acme.email=${YOUR_EMAIL}
+            - --certificatesresolvers.cloudflare.acme.storage=/data/acme.json
+            - --certificatesresolvers.cloudflare.acme.dnschallenge=true
+            - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
+            - --entryPoints.http.forwardedHeaders.trustedIPs=127.0.0.1/32,10.0.0.0/8
+        environment:
+            - CLOUDFLARE_EMAIL=${YOUR_EMAIL}
+            - CLOUDFLARE_DNS_API_TOKEN=${YOUR_CF_API_TOKEN}
         networks:
             - lb_network
+
+    # Add Pangolin (or alternative like Cloudflare Tunnel)
+    pangolin:
+        image: ghcr.io/dperson/pangolin:latest
+        restart: unless-stopped
+        environment:
+            - TOKEN=${PANGOLIN_TOKEN}
+            - DOMAIN=${YOUR_DOMAIN}
+        networks:
+            - lb_network
+        deploy:
+            mode: replicated
+            replicas: 1
+            placement:
+                constraints:
+                    - node.role == worker
+
+    # Example local service proxy
+    localproxy:
+        image: nginx:alpine
+        networks:
+            - lb_network
+        deploy:
+            labels:
+                - traefik.enable=true
+                - traefik.docker.network=lb_network
+                - traefik.http.routers.localproxy.rule=Host(`local.${YOUR_DOMAIN}`)
+                - traefik.http.routers.localproxy.entrypoints=https
+                - traefik.http.routers.localproxy.tls=true
+                - traefik.http.routers.localproxy.tls.certresolver=cloudflare
+                - traefik.http.services.localproxy.loadbalancer.server.port=80
+        volumes:
+            - ./nginx.conf:/etc/nginx/nginx.conf:ro
 
 volumes:
   registry:
