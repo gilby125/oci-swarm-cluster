@@ -8,8 +8,29 @@ RED='\033[0;31m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
-# Get the domain name from Terraform output
-DOMAIN=$(terraform output -raw domain_name 2>/dev/null || echo "throughfire.net")
+# Check if secrets.tfvars exists
+if [ ! -f "../secrets.tfvars" ] && [ ! -f "./secrets.tfvars" ]; then
+    echo -e "${RED}Error: secrets.tfvars file not found!${NC}"
+    echo -e "${YELLOW}Please create a secrets.tfvars file using the setup_secrets.sh script.${NC}"
+    echo -e "${YELLOW}Continuing with default values, but tests may fail.${NC}"
+    SECRETS_FILE_EXISTS=false
+else
+    SECRETS_FILE_EXISTS=true
+    # Determine the path to secrets.tfvars
+    if [ -f "../secrets.tfvars" ]; then
+        SECRETS_FILE="../secrets.tfvars"
+    else
+        SECRETS_FILE="./secrets.tfvars"
+    fi
+
+    # Extract domain name from secrets.tfvars if possible
+    if [ "$SECRETS_FILE_EXISTS" = true ]; then
+        DOMAIN_FROM_SECRETS=$(grep domain_name "$SECRETS_FILE" | cut -d '=' -f2 | tr -d ' "')
+    fi
+fi
+
+# Get the domain name from Terraform output or secrets.tfvars
+DOMAIN=$(terraform output -raw domain_name 2>/dev/null || echo "${DOMAIN_FROM_SECRETS:-throughfire.net}")
 echo -e "${YELLOW}Testing endpoints for domain: ${DOMAIN}${NC}"
 
 # Get the load balancer IP from Terraform output

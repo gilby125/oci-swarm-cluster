@@ -28,9 +28,9 @@ resource "oci_load_balancer_backend_set" "oci_swarm_bes" {
     response_body_regex = ".*"
     url_path            = "/whoami"
     return_code         = 200
-    interval_ms         = 5000
-    timeout_in_millis   = 2000
-    retries             = 10
+    interval_ms         = 10000
+    timeout_in_millis   = 3000
+    retries             = 5
   }
 }
 
@@ -58,9 +58,9 @@ resource "oci_load_balancer_backend_set" "oci_swarm_bes_ssl" {
     response_body_regex = ".*"
     url_path            = "/whoami"
     return_code         = 200
-    interval_ms         = 5000
-    timeout_in_millis   = 2000
-    retries             = 10
+    interval_ms         = 10000
+    timeout_in_millis   = 3000
+    retries             = 5
   }
 }
 

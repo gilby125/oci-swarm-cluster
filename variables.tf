@@ -160,7 +160,7 @@ variable "object_storage_oci_swarm_media_visibility" {
 variable "deploy_database" {
   description = "Whether to deploy the Autonomous Database"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "deploy_web_app" {

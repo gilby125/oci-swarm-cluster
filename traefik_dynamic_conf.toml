@@ -1,0 +1,35 @@
+# Dynamic configuration for Traefik
+
+[http.middlewares]
+  [http.middlewares.secure-headers.headers]
+    browserXssFilter = true
+    contentTypeNosniff = true
+    frameDeny = false
+    sslRedirect = true
+    hostsProxyHeaders = ["X-Forwarded-Host"]
+    stsIncludeSubdomains = true
+    stsPreload = true
+    stsSeconds = 31536000
+    customFrameOptionsValue = "SAMEORIGIN"
+    # More permissive Content Security Policy that allows external resources
+    contentSecurityPolicy = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; img-src * data: blob:; style-src * 'unsafe-inline'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * 'unsafe-inline'; font-src * data:; object-src 'none'; media-src *; frame-src *; worker-src *; frame-ancestors *; form-action *; upgrade-insecure-requests;"
+
+  [http.middlewares.compress.compress]
+    excludedContentTypes = ["text/event-stream"]
+
+  [http.middlewares.rate-limit.rateLimit]
+    average = 100
+    burst = 50
+
+[tls.options]
+  [tls.options.default]
+    minVersion = "VersionTLS12"
+    sniStrict = true
+    cipherSuites = [
+      "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+      "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+      "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+      "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+      "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+    ]

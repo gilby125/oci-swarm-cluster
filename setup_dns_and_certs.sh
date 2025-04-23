@@ -7,6 +7,22 @@ YELLOW='\033[0;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Check if secrets.tfvars exists
+if [ ! -f "secrets.tfvars" ]; then
+    echo -e "${RED}Error: secrets.tfvars file not found!${NC}"
+    echo -e "${YELLOW}Please create a secrets.tfvars file based on the secrets.tfvars.example template.${NC}"
+    exit 1
+fi
+
+# Extract domain name from secrets.tfvars
+DOMAIN_NAME=$(grep domain_name secrets.tfvars | cut -d '=' -f2 | tr -d ' "')
+if [ -z "$DOMAIN_NAME" ]; then
+    echo -e "${RED}Error: Could not find domain_name in secrets.tfvars!${NC}"
+    exit 1
+fi
+
+echo -e "${YELLOW}Setting up DNS and certificates for domain: ${DOMAIN_NAME}${NC}"
+
 echo -e "${YELLOW}Step 1: Applying Terraform configuration with flexible SSL...${NC}"
 terraform apply -var-file=secrets.tfvars -auto-approve
 
@@ -23,17 +39,8 @@ for i in {300..1}; do
 done
 
 echo -e "${YELLOW}Step 3: Updating Cloudflare SSL setting to full_strict...${NC}"
-# Create a temporary file with the updated SSL setting
-cat > ssl_update.tf << EOF
-resource "cloudflare_zone_settings_override" "domain_settings" {
-  zone_id = data.cloudflare_zone.domain.id
-  
-  settings {
-    ssl = "full_strict"  # Change to full_strict after certificates are issued
-    always_use_https = "on"
-  }
-}
-EOF
+# Update the Cloudflare SSL setting in the Terraform configuration
+sed -i 's/ssl = "flexible"/ssl = "full_strict"/' cloudflare.tf
 
 # Apply the updated configuration
 terraform apply -var-file=secrets.tfvars -auto-approve

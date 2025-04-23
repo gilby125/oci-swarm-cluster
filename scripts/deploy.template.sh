@@ -39,7 +39,11 @@ source /root/swarm.env
 export $(cut -d= -f1 /root/swarm.env)
 
 # Make sure Cloudflare and Pangolin variables are exported
-export YOUR_EMAIL PANGOLIN_TOKEN YOUR_DOMAIN YOUR_CF_API_TOKEN
+export YOUR_EMAIL=${cloudflare_email}
+export YOUR_CF_API_TOKEN=${cloudflare_api_token}
+export PANGOLIN_TOKEN=${pangolin_token}
+export YOUR_DOMAIN=${domain_name}
+export DEPLOY_ID=${deploy_id}
 docker plugin set s3fs AWSACCESSKEYID=$AWSACCESSKEYID
 docker plugin set s3fs AWSSECRETACCESSKEY="$AWSSECRETACCESSKEY"
 docker plugin set s3fs DEFAULT_S3FSOPTS="nomultipart,use_path_request_style,url=https://$OBJECT_NAMESPACE.compat.objectstorage.$REGION_ID.oraclecloud.com/"
@@ -50,7 +54,11 @@ if [ "${db_name}" != "" ] && [[ $(echo $(hostname) | grep "\-0$") ]]; then
     sqlplus ADMIN/"${atp_pw}"@${db_name}_tp @/root/catalogue.sql
 fi
 
+# Create directories for Traefik
 mkdir -p /var/log/traefik
+
+# Copy Traefik dynamic configuration file
+cp /root/traefik_dynamic_conf.toml /root/
 mkdir -p /root/data/action.d/
 mkdir -p /root/data/filter.d/
 mkdir -p /root/data/jail.d/
@@ -74,13 +82,33 @@ docker run -d --name fail2ban \
     crazymax/fail2ban:latest
 
 if [[ $(echo $(hostname) | grep "\-1$") ]]; then
-    docker network create -d overlay lb_network
-    docker network create -d overlay agent_network
+    # Check if networks already exist and create them if they don't
+    if ! docker network ls | grep -q "lb_network"; then
+        echo "Creating lb_network overlay network..."
+        docker network create -d overlay lb_network
+    else
+        echo "lb_network already exists, skipping creation."
+    fi
+
+    if ! docker network ls | grep -q "agent_network"; then
+        echo "Creating agent_network overlay network..."
+        docker network create -d overlay agent_network
+    else
+        echo "agent_network already exists, skipping creation."
+    fi
 
     # Pre-process the Docker Compose file to ensure variables are properly substituted
     echo "Pre-processing Docker Compose file to substitute variables..."
     envsubst < /root/docker-compose.yml > /root/docker-compose.processed.yml
 
+    # Save a copy for debugging purposes
+    cp /root/docker-compose.processed.yml /root/docker-compose.processed.yml.backup
+
     # Deploy the stack with the processed file
+    echo "Deploying Docker Swarm stack..."
     docker stack deploy -c /root/docker-compose.processed.yml swarm
+
+    # Verify deployment
+    echo "Verifying deployment status:"
+    docker stack services swarm
 fi

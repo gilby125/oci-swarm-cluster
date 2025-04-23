@@ -33,8 +33,8 @@ services:
                 - traefik.enable=true
                 - traefik.docker.network=lb_network
                 - traefik.constraint-label=traefik-public
-                - traefik.http.routers.registry.rule=(Host(`registry.${domain_name}`) && PathPrefix(`/v2/`))
-                - traefik.http.routers.registry-v2.rule=(Host(`v2.registry.${domain_name}`) && PathPrefix(`/v2/`))
+                - traefik.http.routers.registry.rule=(Host(`registry.example.com`) && PathPrefix(`/v2/`))
+                - traefik.http.routers.registry-v2.rule=(Host(`v2.registry.example.com`) && PathPrefix(`/v2/`))
                 - traefik.http.routers.registry.entrypoints=https
                 - traefik.http.routers.registry.tls=true
                 - traefik.http.routers.registry.tls.certresolver=cloudflare
@@ -44,7 +44,7 @@ services:
                 - traefik.http.services.registry.loadbalancer.server.port=5000
                 - traefik.http.services.registry-v2.loadbalancer.server.port=5000
                 # Add HTTP router for registry to handle redirects
-                - traefik.http.routers.registry-http.rule=(Host(`registry.${domain_name}`) && PathPrefix(`/v2/`))
+                - traefik.http.routers.registry-http.rule=(Host(`registry.example.com`) && PathPrefix(`/v2/`))
                 - traefik.http.routers.registry-http.entrypoints=http
                 - traefik.http.middlewares.registry-https-redirect.redirectscheme.scheme=https
                 - traefik.http.routers.registry-http.middlewares=registry-https-redirect
@@ -83,8 +83,8 @@ services:
                 - traefik.enable=true
                 - traefik.docker.network=lb_network
                 - traefik.constraint-label=traefik-public
-                - traefik.http.routers.portainer.rule=(Host(`dev-oci.${domain_name}`) && PathPrefix(`/`))
-                - traefik.http.routers.portainer-v2-11-1.rule=(Host(`v2-11-1.dev-oci.${domain_name}`) && PathPrefix(`/`))
+                - traefik.http.routers.portainer.rule=(Host(`dev-oci.example.com`) && PathPrefix(`/`))
+                - traefik.http.routers.portainer-v2-11-1.rule=(Host(`v2-11-1.dev-oci.example.com`) && PathPrefix(`/`))
                 - traefik.http.routers.portainer.entrypoints=https
                 - traefik.http.routers.portainer.tls=true
                 - traefik.http.routers.portainer.tls.certresolver=cloudflare
@@ -94,7 +94,7 @@ services:
                 - traefik.http.services.portainer.loadbalancer.server.port=9000
                 - traefik.http.services.portainer-v2-11-1.loadbalancer.server.port=9000
                 # Add HTTP router for portainer to handle redirects
-                - traefik.http.routers.portainer-http.rule=(Host(`dev-oci.${domain_name}`) && PathPrefix(`/`))
+                - traefik.http.routers.portainer-http.rule=(Host(`dev-oci.example.com`) && PathPrefix(`/`))
                 - traefik.http.routers.portainer-http.entrypoints=http
                 - traefik.http.middlewares.portainer-https-redirect.redirectscheme.scheme=https
                 - traefik.http.routers.portainer-http.middlewares=portainer-https-redirect
@@ -130,7 +130,7 @@ services:
             - --entrypoints.http.address=:80
             - --entrypoints.https.address=:443
             - --serversTransport.insecureSkipVerify=true
-            - --certificatesresolvers.cloudflare.acme.email=${cloudflare_email}
+            - --certificatesresolvers.cloudflare.acme.email=test@example.com
             - --certificatesresolvers.cloudflare.acme.storage=/data/acme.json
             - --certificatesresolvers.cloudflare.acme.dnschallenge=true
             - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
@@ -153,8 +153,8 @@ services:
             - --api.insecure=false
             - --ping=true
         environment:
-            - CLOUDFLARE_EMAIL=${cloudflare_email}
-            - CLOUDFLARE_DNS_API_TOKEN=${cloudflare_api_token}
+            - CLOUDFLARE_EMAIL=test@example.com
+            - CLOUDFLARE_DNS_API_TOKEN=test-token
         networks:
             - lb_network
 
@@ -163,8 +163,8 @@ services:
         image: ghcr.io/dperson/pangolin:latest
         restart: unless-stopped
         environment:
-            - TOKEN=${pangolin_token}
-            - DOMAIN=${domain_name}
+            - TOKEN=test-pangolin-token
+            - DOMAIN=example.com
         networks:
             - lb_network
         deploy:
@@ -183,8 +183,8 @@ services:
             labels:
                 - traefik.enable=true
                 - traefik.docker.network=lb_network
-                - traefik.http.routers.localproxy.rule=Host(`local.${domain_name}`)
-                - traefik.http.routers.localproxy-alpine.rule=Host(`alpine.local.${domain_name}`)
+                - traefik.http.routers.localproxy.rule=Host(`local.example.com`)
+                - traefik.http.routers.localproxy-alpine.rule=Host(`alpine.local.example.com`)
                 - traefik.http.routers.localproxy.entrypoints=https
                 - traefik.http.routers.localproxy.tls=true
                 - traefik.http.routers.localproxy.tls.certresolver=cloudflare
@@ -194,7 +194,7 @@ services:
                 - traefik.http.services.localproxy.loadbalancer.server.port=80
                 - traefik.http.services.localproxy-alpine.loadbalancer.server.port=80
                 # Add HTTP router for localproxy to handle redirects
-                - traefik.http.routers.localproxy-http.rule=Host(`local.${domain_name}`)
+                - traefik.http.routers.localproxy-http.rule=Host(`local.example.com`)
                 - traefik.http.routers.localproxy-http.entrypoints=http
                 - traefik.http.middlewares.localproxy-https-redirect.redirectscheme.scheme=https
                 - traefik.http.routers.localproxy-http.middlewares=localproxy-https-redirect
@@ -204,10 +204,10 @@ services:
 volumes:
   registry:
     driver: s3fs
-    name: "oci-registry-${deploy_id}"
+    name: "oci-registry-test123"
   portainer:
     driver: s3fs
-    name: "oci-portainer-${deploy_id}"
+    name: "oci-portainer-test123"
 
 networks:
   # Use the previously created public network "traefik-public", shared with other

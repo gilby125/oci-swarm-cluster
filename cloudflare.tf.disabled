@@ -23,6 +23,9 @@ resource "cloudflare_record" "dev_oci" {
   content = oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0].ip_address
   type    = "A"
   proxied = true
+  comment = "Managed by Terraform"
+  # Add TTL to prevent conflicts
+  ttl     = 1 # Auto
 }
 
 resource "cloudflare_record" "registry" {
@@ -31,6 +34,8 @@ resource "cloudflare_record" "registry" {
   content = oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0].ip_address
   type    = "A"
   proxied = true
+  comment = "Managed by Terraform"
+  ttl     = 1 # Auto
 }
 
 resource "cloudflare_record" "local" {
@@ -39,6 +44,8 @@ resource "cloudflare_record" "local" {
   content = oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0].ip_address
   type    = "A"
   proxied = true
+  comment = "Managed by Terraform"
+  ttl     = 1 # Auto
 }
 
 resource "cloudflare_record" "admin_pangolin" {
@@ -47,6 +54,8 @@ resource "cloudflare_record" "admin_pangolin" {
   content = oci_core_instance.app_instance[0].public_ip
   type    = "A"
   proxied = true
+  comment = "Managed by Terraform"
+  ttl     = 1 # Auto
 }
 
 # Create DNS records for version-specific subdomains
@@ -56,6 +65,8 @@ resource "cloudflare_record" "portainer_version" {
   content = oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0].ip_address
   type    = "A"
   proxied = true
+  comment = "Managed by Terraform"
+  ttl     = 1 # Auto
 }
 
 resource "cloudflare_record" "registry_version" {
@@ -64,6 +75,8 @@ resource "cloudflare_record" "registry_version" {
   content = oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0].ip_address
   type    = "A"
   proxied = true
+  comment = "Managed by Terraform"
+  ttl     = 1 # Auto
 }
 
 resource "cloudflare_record" "local_version" {
@@ -72,8 +85,22 @@ resource "cloudflare_record" "local_version" {
   content = oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0].ip_address
   type    = "A"
   proxied = true
+  comment = "Managed by Terraform"
+  ttl     = 1 # Auto
 }
 
-# SSL and HTTPS settings are configured manually or via setup_dns_and_certs.sh script
+# SSL and HTTPS settings
+resource "cloudflare_zone_settings_override" "domain_settings" {
+  zone_id = data.cloudflare_zone.domain.id
 
-# SSL settings are configured manually or via setup_dns_and_certs.sh script
+  settings {
+    # Start with flexible SSL to allow certificate issuance
+    # This will be updated to full_strict by setup_dns_and_certs.sh after certificates are issued
+    ssl = "flexible"
+    always_use_https = "on"
+    min_tls_version = "1.2"
+    tls_1_3 = "on"
+    automatic_https_rewrites = "on"
+    universal_ssl = "on"
+  }
+}

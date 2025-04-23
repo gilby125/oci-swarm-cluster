@@ -32,12 +32,33 @@ The application uses a typical topology for a 3-tier web application as follows
 
 Clone <https://github.com/marcelo-ochoa/oci-swarm-cluster>
 
+### Setting Up Configuration Files
+
+#### Option 1: Manual Configuration
+
 - Rename the file `terraform.tfvars.example` to `terraform.tfvars`
 - Change the credentials variables to your user and any other desirable variables
-- Set the `cloudflare_email` and `cloudflare_api_token` variables if you want to use Cloudflare integration
+- Create a `secrets.tfvars` file based on the `secrets.tfvars.example` template
+- Add your sensitive variables to `secrets.tfvars`, including:
+  - `cloudflare_email` - Your Cloudflare account email
+  - `cloudflare_api_token` - Your Cloudflare API token
+  - `domain_name` - Your domain managed by Cloudflare
+
+#### Option 2: Using the Setup Script
+
+Run the setup script to create your secrets.tfvars file interactively:
+
+```bash
+./setup_secrets.sh
+```
+
+This script will guide you through creating a properly formatted secrets.tfvars file with all required variables.
+
+### Deployment Options
+
 - Optionally set `deploy_database=false` or `deploy_web_app=false` to disable those components
 - Run `terraform init` to init the terraform providers
-- Run `terraform apply` to create the resources on OCI
+- Run `terraform apply -var-file=secrets.tfvars` to create the resources on OCI
 
 ## Using Resource Manager GitHub Connector
 
@@ -88,9 +109,11 @@ To set up DNS and certificates in one step, run:
 ```
 
 This script will:
-1. Apply the Terraform configuration with flexible SSL initially
-2. Wait for certificate issuance
-3. Update the SSL setting to full_strict for maximum security
+1. Verify that your secrets.tfvars file exists and contains the required variables
+2. Apply the Terraform configuration with flexible SSL initially
+3. Wait for certificate issuance
+4. Update the SSL setting to full_strict for maximum security
+5. Test connectivity to all configured domains
 
 ### Pangolin Integration
 
@@ -113,6 +136,9 @@ After deploying the infrastructure with Terraform, you can verify that all endpo
 To run the tests:
 
 ```bash
+# Make the scripts executable
+chmod +x tests/test_endpoints.sh tests/verify_deployment.sh
+
 # Basic tests
 ./tests/test_endpoints.sh
 
@@ -120,7 +146,26 @@ To run the tests:
 ./tests/verify_deployment.sh
 ```
 
+The test scripts will automatically check for the existence of your secrets.tfvars file and use values from it if available.
+
 See [TESTING.md](TESTING.md) for detailed information about the test scripts and troubleshooting tips.
+
+## Troubleshooting
+
+If you encounter issues with your Docker Swarm cluster deployment, refer to the [DEBUGGING.md](DEBUGGING.md) guide for a comprehensive approach to identifying and resolving common problems.
+
+The debugging guide covers:
+
+- Traefik configuration issues
+- Registry service connectivity
+- Cloudflare DNS and routing
+- Load balancer configuration
+- Docker Swarm network configuration
+- Security group and firewall rules
+- Pangolin configuration
+- Service health checks
+
+The guide provides step-by-step instructions for diagnosing and fixing each type of issue.
 
 [oci]: https://cloud.oracle.com/en_US/cloud-infrastructure
 [orm]: https://docs.cloud.oracle.com/iaas/Content/ResourceManager/Concepts/resourcemanager.htm

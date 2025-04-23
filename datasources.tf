@@ -178,6 +178,11 @@ data "template_file" "deploy_template" {
     atp_pw                  = random_string.autonomous_database_admin_password.result
     oci_swarm_media_visibility = var.object_storage_oci_swarm_media_visibility
     wallet_par              = var.deploy_database ? "https://objectstorage.${var.region}.oraclecloud.com${oci_objectstorage_preauthrequest.oci_swarm_wallet_preauth[0].access_uri}" : ""
+    cloudflare_email        = var.cloudflare_email
+    cloudflare_api_token    = var.cloudflare_api_token
+    pangolin_token          = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
+    domain_name             = var.domain_name
+    deploy_id               = random_string.deploy_id.result
   }
 }
 data "template_file" "catalogue_sql_template" {

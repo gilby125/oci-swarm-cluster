@@ -41,13 +41,42 @@ print_info() {
   echo -e "${YELLOW}$1${NC}"
 }
 
+# Check for secrets.tfvars file
+check_secrets_file() {
+  print_section "Checking for secrets.tfvars file"
+
+  if [ ! -f "../secrets.tfvars" ] && [ ! -f "./secrets.tfvars" ]; then
+    print_failure "secrets.tfvars file not found!"
+    print_info "Please create a secrets.tfvars file using the setup_secrets.sh script."
+    print_info "Continuing with default values, but verification may fail."
+    SECRETS_FILE_EXISTS=false
+  else
+    SECRETS_FILE_EXISTS=true
+    # Determine the path to secrets.tfvars
+    if [ -f "../secrets.tfvars" ]; then
+      SECRETS_FILE="../secrets.tfvars"
+    else
+      SECRETS_FILE="./secrets.tfvars"
+    fi
+    print_success "Found secrets.tfvars file at $SECRETS_FILE"
+
+    # Extract domain name from secrets.tfvars if possible
+    if [ "$SECRETS_FILE_EXISTS" = true ]; then
+      DOMAIN_FROM_SECRETS=$(grep domain_name "$SECRETS_FILE" | cut -d '=' -f2 | tr -d ' "')
+      if [ -n "$DOMAIN_FROM_SECRETS" ]; then
+        print_success "Domain from secrets file: $DOMAIN_FROM_SECRETS"
+      fi
+    fi
+  fi
+}
+
 # Get Terraform outputs
 get_terraform_outputs() {
   print_section "Getting Terraform outputs"
 
-  DOMAIN=$(terraform output -raw domain_name 2>/dev/null || echo "")
+  DOMAIN=$(terraform output -raw domain_name 2>/dev/null || echo "${DOMAIN_FROM_SECRETS:-}")
   if [ -z "$DOMAIN" ]; then
-    print_failure "Failed to get domain name from Terraform output"
+    print_failure "Failed to get domain name from Terraform output or secrets file"
     print_info "Please enter your domain name:"
     read -p "> " DOMAIN
   else
@@ -210,6 +239,9 @@ test_cloudflare() {
 # Main function
 main() {
   print_header "OCI Swarm Cluster Deployment Verification"
+
+  # Check for secrets.tfvars file
+  check_secrets_file
 
   # Get Terraform outputs
   get_terraform_outputs
