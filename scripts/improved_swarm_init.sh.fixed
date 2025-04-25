@@ -1,0 +1,206 @@
+#!/bin/bash
+# Improved Docker Swarm initialization script with better error handling and retry logic
+
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+# Function to log messages with timestamp
+log_message() {
+    local level=$1
+    local message=$2
+    local color=$NC
+    
+    case $level in
+        "INFO") color=$GREEN ;;
+        "WARN") color=$YELLOW ;;
+        "ERROR") color=$RED ;;
+    esac
+    
+    echo -e "[$(date '+%Y-%m-%d %H:%M:%S')] $color$level$NC: $message"
+}
+
+# Function to retry a command
+retry_command() {
+    local cmd=$1
+    local description=$2
+    local max_attempts=3
+    local delay=10
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        log_message "INFO" "Attempt $attempt/$max_attempts: $description"
+        eval $cmd
+        if [ $? -eq 0 ]; then
+            log_message "INFO" "$description - Successful"
+            return 0
+        else
+            log_message "WARN" "$description - Failed (Attempt $attempt/$max_attempts)"
+            if [ $attempt -lt $max_attempts ]; then
+                log_message "INFO" "Retrying in $delay seconds..."
+                sleep $delay
+            fi
+            attempt=$((attempt+1))
+        fi
+    done
+    
+    log_message "ERROR" "$description - All attempts failed"
+    return 1
+}
+
+# Function to check if Docker is running
+check_docker() {
+    log_message "INFO" "Checking if Docker is running..."
+    if ! systemctl is-active --quiet docker; then
+        log_message "WARN" "Docker is not running, attempting to start it..."
+        systemctl start docker
+        sleep 5
+        if ! systemctl is-active --quiet docker; then
+            log_message "ERROR" "Failed to start Docker"
+            return 1
+        fi
+    fi
+    log_message "INFO" "Docker is running"
+    return 0
+}
+
+# Function to initialize Docker Swarm on manager node
+init_swarm_manager() {
+    local ip=$1
+    
+    # Check if already part of a swarm
+    if docker info | grep -q "Swarm: active"; then
+        log_message "INFO" "This node is already part of an active swarm"
+        return 0
+    fi
+    
+    log_message "INFO" "Initializing Docker Swarm on manager node with IP: $ip"
+    retry_command "docker swarm init --advertise-addr $ip" "Swarm initialization"
+    
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Failed to initialize Docker Swarm"
+        return 1
+    fi
+    
+    # Wait for swarm to stabilize
+    log_message "INFO" "Waiting for swarm to stabilize..."
+    sleep 15
+    
+    # Verify swarm initialization
+    if ! docker node ls &>/dev/null; then
+        log_message "ERROR" "Swarm verification failed"
+        return 1
+    fi
+    
+    log_message "INFO" "Docker Swarm successfully initialized"
+    return 0
+}
+
+# Function to create overlay networks
+create_overlay_networks() {
+    log_message "INFO" "Creating required overlay networks..."
+    
+    # Create lb_network if it doesn't exist
+    if ! docker network ls | grep -q "lb_network"; then
+        log_message "INFO" "Creating lb_network..."
+        retry_command "docker network create --driver=overlay --attachable lb_network" "Create lb_network"
+        if [ $? -ne 0 ]; then
+            log_message "ERROR" "Failed to create lb_network"
+            return 1
+        fi
+    else
+        log_message "INFO" "lb_network already exists"
+    fi
+    
+    log_message "INFO" "Overlay networks created successfully"
+    return 0
+}
+
+# Function to get worker join token
+get_worker_token() {
+    log_message "INFO" "Getting worker join token..."
+    local token=$(docker swarm join-token worker -q)
+    if [ -z "$token" ]; then
+        log_message "ERROR" "Failed to get worker join token"
+        return 1
+    fi
+    echo "$token"
+    return 0
+}
+
+# Function to get manager join token
+get_manager_token() {
+    log_message "INFO" "Getting manager join token..."
+    local token=$(docker swarm join-token manager -q)
+    if [ -z "$token" ]; then
+        log_message "ERROR" "Failed to get manager join token"
+        return 1
+    fi
+    echo "$token"
+    return 0
+}
+
+# Function to join a worker node to the swarm
+join_worker_node() {
+    local manager_ip=$1
+    local token=$2
+    
+    # Check if already part of a swarm
+    if docker info | grep -q "Swarm: active"; then
+        log_message "INFO" "This node is already part of an active swarm"
+        return 0
+    fi
+    
+    log_message "INFO" "Joining worker node to swarm..."
+    retry_command "docker swarm join --token $token $manager_ip:2377" "Join worker to swarm"
+    
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Failed to join worker to swarm"
+        return 1
+    fi
+    
+    log_message "INFO" "Worker node successfully joined the swarm"
+    return 0
+}
+
+# Function to join a manager node to the swarm
+join_manager_node() {
+    local manager_ip=$1
+    local token=$2
+    
+    # Check if already part of a swarm
+    if docker info | grep -q "Swarm: active"; then
+        log_message "INFO" "This node is already part of an active swarm"
+        return 0
+    fi
+    
+    log_message "INFO" "Joining manager node to swarm..."
+    retry_command "docker swarm join --token $token $manager_ip:2377" "Join manager to swarm"
+    
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Failed to join manager to swarm"
+        return 1
+    fi
+    
+    log_message "INFO" "Manager node successfully joined the swarm"
+    return 0
+}
+
+# Function to set up environment variables
+setup_environment_variables() {
+    log_message "INFO" "Setting up environment variables..."
+    
+    # Check if environment variables are already set in .bashrc
+    if grep -q "DOMAIN_NAME" /root/.bashrc && grep -q "PANGOLIN_TOKEN" /root/.bashrc && grep -q "CLOUDFLARE_EMAIL" /root/.bashrc && grep -q "CLOUDFLARE_API_TOKEN" /root/.bashrc; then
+        log_message "INFO" "Environment variables are already set"
+        return 0
+    fi
+    
+    # Add environment variables to .bashrc
+    cat << EOF >> /root/.bashrc
+export DOMAIN_NAME=DOMAIN_NAME_VALUE
+export PANGOLIN_TOKEN=PANGOLIN_TOKEN_VALUE
+export CLOUDFLARE_EMAIL=CLOUDFLARE_EMAIL_VALUE
+export CLOUDFLARE_API_TOKEN=CLOUDFLARE_API_TOKEN_VALUE

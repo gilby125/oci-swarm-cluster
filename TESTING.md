@@ -117,58 +117,106 @@ If the tests fail, here are some common issues and how to resolve them:
 
 ## Accessing the Pangolin Admin Interface
 
-Pangolin provides an admin interface that allows you to manage your tunnels and view statistics. To access it:
+Pangolin is a self-hosted tunneled reverse proxy with identity and access management. It provides an admin interface that allows you to manage your tunnels, users, and view statistics.
 
-### Method 1: Direct Access via Subdomain
+### Direct Access via Subdomain
 
-The Pangolin admin interface should be accessible at:
+The Pangolin admin interface is accessible at:
 
 ```
-https://admin.pangolin.<your-domain>
+https://admin-pangolin.<your-domain>
 ```
 
 For example:
 
 ```
-https://admin.pangolin.throughfire.net
+https://admin-pangolin.throughfire.net
 ```
-
-### Method 2: Access via the Pangolin Container
-
-If the admin interface isn't accessible via the subdomain, you can access it directly through the Pangolin container:
-
-1. SSH into one of your compute instances:
-   ```bash
-   ssh -i /path/to/private/key opc@<instance-ip>
-   ```
-
-2. Find the Pangolin container ID:
-   ```bash
-   docker ps | grep pangolin
-   ```
-
-3. Get the Pangolin container's IP address:
-   ```bash
-   docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' <container-id>
-   ```
-
-4. Access the admin interface using the container's IP address:
-   ```bash
-   curl http://<container-ip>:8080
-   ```
 
 ### Authentication
 
 To access the Pangolin admin interface, you'll need to authenticate using:
 
-- **Username**: admin
-- **Password**: Your Pangolin token
+- **Email**: `admin@<your-domain>` (e.g., `admin@throughfire.net`)
+- **Password**: Your Pangolin admin password
 
-You can retrieve the generated token using:
+You can retrieve the admin credentials using:
 
 ```bash
-terraform output pangolin_token
+terraform output pangolin_credentials
 ```
+
+### Verifying Pangolin Functionality
+
+To verify that Pangolin is working correctly:
+
+1. Access the admin interface at `https://admin-pangolin.<your-domain>`
+2. Log in with the admin credentials
+3. Verify that you can see the Pangolin dashboard
+4. Check that you can create and manage tunnels
+
+### Troubleshooting Pangolin
+
+If you encounter issues with Pangolin:
+
+1. Check if the Pangolin stack is deployed:
+   ```bash
+   # SSH into the compute instance
+   ssh -i /path/to/private/key opc@<instance-ip>
+
+   # Check the Pangolin services
+   docker service ls | grep pangolin
+   ```
+
+2. Check the Pangolin container logs:
+   ```bash
+   # Check the Pangolin service logs
+   docker service logs pangolin_pangolin
+
+   # Check the Gerbil service logs
+   docker service logs pangolin_gerbil
+   ```
+
+3. Verify the Pangolin configuration in the Docker Compose file:
+   ```bash
+   cat /root/docker-compose.yml | grep -A 40 "# Pangolin"
+   ```
+
+4. Ensure that the DNS record for `admin-pangolin.<your-domain>` is properly configured in Cloudflare
+
+5. If you see a 520 error, it typically means that the Pangolin service is not responding correctly. Check the following:
+   - Verify that the Docker Swarm stack is properly deployed:
+     ```bash
+     docker stack ls
+     docker service ls | grep pangolin
+     ```
+   - Check the Pangolin service logs:
+     ```bash
+     docker service logs swarm_pangolin
+     ```
+   - Verify that the Pangolin service is listening on port 3001:
+     ```bash
+     # Get the container ID
+     CONTAINER_ID=$(docker ps | grep swarm_pangolin | awk '{print $1}')
+
+     # Check if the service is listening on port 3001
+     docker exec $CONTAINER_ID netstat -tulpn | grep 3001
+     ```
+
+6. The 520 error can be caused by several issues:
+   - Incorrect network configuration: Ensure Pangolin is on both the lb_network and traefik-public networks
+   - Wrong port configuration: Pangolin runs on port 3001, not port 80
+   - Missing Traefik labels: Ensure the Traefik labels are correctly configured
+   - DNS issues: Verify that the DNS record for admin-pangolin.throughfire.net points to your load balancer
+
+7. Verify that Traefik can route to the Pangolin service:
+   ```bash
+   # Check Traefik logs for routing issues
+   docker service logs swarm_traefik | grep pangolin
+
+   # Check if Traefik can resolve the Pangolin service
+   docker exec $(docker ps | grep traefik | awk '{print $1}') ping -c 3 swarm_pangolin
+   ```
 
 ## Advanced Testing
 

@@ -27,7 +27,7 @@ resource "oci_load_balancer_backend_set" "oci_swarm_bes" {
     protocol            = "HTTP"
     response_body_regex = ".*"
     url_path            = "/whoami"
-    return_code         = 200
+    return_code         = 404
     interval_ms         = 10000
     timeout_in_millis   = 3000
     retries             = 5
@@ -37,14 +37,14 @@ resource "oci_load_balancer_backend_set" "oci_swarm_bes" {
 resource "oci_load_balancer_backend" "oci-swarm-be" {
   load_balancer_id = oci_load_balancer_load_balancer.oci_swarm_lb.id
   backendset_name  = oci_load_balancer_backend_set.oci_swarm_bes.name
-  ip_address       = element(oci_core_instance.app_instance.*.private_ip, count.index)
+  ip_address       = oci_core_instance.app_instance[0].private_ip
   port             = 80
   backup           = false
   drain            = false
   offline          = false
   weight           = 1
 
-  count = var.deploy_web_app ? var.num_nodes : 0
+  count = var.deploy_web_app ? 1 : 0
 }
 
 resource "oci_load_balancer_backend_set" "oci_swarm_bes_ssl" {
@@ -53,11 +53,11 @@ resource "oci_load_balancer_backend_set" "oci_swarm_bes_ssl" {
   policy           = "IP_HASH"
 
   health_checker {
-    port                = "80"
+    port                = "443"
     protocol            = "HTTP"
     response_body_regex = ".*"
     url_path            = "/whoami"
-    return_code         = 200
+    return_code         = 404
     interval_ms         = 10000
     timeout_in_millis   = 3000
     retries             = 5

@@ -1,0 +1,78 @@
+#!/bin/bash
+# Improved deployment script for Docker Swarm
+
+# Source the improved swarm initialization script
+source /root/improved_swarm_init.sh
+
+# Make sure we have the get_ips function
+if ! type get_ips >/dev/null 2>&1; then
+    echo "Error: get_ips function not found. Make sure improved_swarm_init.sh is properly sourced."
+    exit 1
+fi
+
+# Function to deploy Docker Swarm stack
+deploy_stack() {
+    local compose_file=$1
+    local stack_name=${2:-swarm}
+    
+    log_message "INFO" "Deploying stack $stack_name from $compose_file"
+    
+    # Check if the compose file exists
+    if [ ! -f "$compose_file" ]; then
+        log_message "ERROR" "Compose file $compose_file not found"
+        return 1
+    fi
+    
+    # Deploy the stack
+    retry_command "docker stack deploy -c $compose_file $stack_name" "Deploy stack $stack_name" 3 10
+    
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Failed to deploy stack $stack_name"
+        return 1
+    fi
+    
+    log_message "INFO" "Stack $stack_name deployed successfully"
+    return 0
+}
+
+# Main function
+main() {
+    local compose_file=${1:-/root/docker-compose.yml}
+    local stack_name=${2:-swarm}
+    
+    log_message "INFO" "Starting deployment process"
+    
+    # Check Docker installation
+    check_docker
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Docker check failed"
+        exit 1
+    fi
+    
+    # Check if node is part of a swarm
+    if ! docker info | grep -q "Swarm: active"; then
+        log_message "ERROR" "This node is not part of an active swarm"
+        exit 1
+    fi
+    
+    # Check if this node is a manager
+    if ! docker node ls &>/dev/null; then
+        log_message "ERROR" "This node is not a swarm manager"
+        exit 1
+    fi
+    
+    # Deploy the stack
+    deploy_stack "$compose_file" "$stack_name"
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Deployment failed"
+        exit 1
+    fi
+    
+    log_message "INFO" "Deployment completed successfully"
+    return 0
+}
+
+# If this script is being executed directly, run the main function
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

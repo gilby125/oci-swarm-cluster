@@ -1,0 +1,58 @@
+terraform {
+  required_providers {
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 4.0"
+    }
+  }
+}
+
+provider "cloudflare" {
+  api_token = var.cloudflare_api_token
+}
+
+# Cloudflare data source - only used if credentials are provided
+data "cloudflare_zone" "domain" {
+  count = local.use_cloudflare ? 1 : 0
+  name  = var.domain_name
+}
+
+locals {
+  dns_records = local.use_cloudflare ? [
+    "dev-oci",
+    "local",
+    "local-version",
+    "registry",
+    "registry-version",
+    "portainer",
+    "portainer-version",
+    "admin-pangolin"
+  ] : []
+
+  # This ensures we're explicitly managing all DNS records we care about
+  managed_records = local.use_cloudflare ? {
+    for record in local.dns_records : record => {
+      name    = record
+      content = oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0].ip_address
+      type    = "A"
+      ttl     = 1
+      proxied = true
+    }
+  } : {}
+}
+
+resource "cloudflare_record" "dns_records" {
+  for_each = local.managed_records
+
+  zone_id         = data.cloudflare_zone.domain[0].id
+  name            = each.value.name
+  content         = each.value.content
+  type            = each.value.type
+  ttl             = each.value.ttl
+  proxied         = each.value.proxied
+  allow_overwrite = true
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}

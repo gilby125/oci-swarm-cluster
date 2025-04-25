@@ -1,0 +1,14 @@
+{
+  "domain": "admin-pangolin.${domain_name}",
+  "adminEmail": "admin@${domain_name}",
+  "adminPassword": "${pangolin_admin_password}",
+  "jwtSecret": "${pangolin_token}",
+  "database": {
+    "type": "sqlite",
+    "path": "/app/config/pangolin.db"
+  },
+  "server": {
+    "port": 3001,
+    "host": "0.0.0.0"
+  }
+}

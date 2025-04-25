@@ -57,6 +57,16 @@ resource "random_string" "pangolin_token" {
   min_numeric      = 8
 }
 
+resource "random_string" "pangolin_admin_password" {
+  length           = 16
+  special          = true
+  min_upper        = 3
+  min_lower        = 3
+  min_numeric      = 3
+  min_special      = 3
+  override_special = "{}#^*<>[]%~"
+}
+
 resource "oci_database_autonomous_database_wallet" "autonomous_database_wallet" {
   count                  = var.deploy_database ? 1 : 0
   autonomous_database_id = oci_database_autonomous_database.oci_swarm_autonomous_database[0].id
@@ -118,6 +128,22 @@ data "oci_identity_regions" "home_region" {
 }
 
 # Cloud Init
+data "template_file" "improved_swarm_init" {
+  template = file("${path.module}/scripts/improved_swarm_init_fixed.sh")
+
+  vars = {
+    domain_name = var.domain_name
+    pangolin_token = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
+    pangolin_admin_password = var.pangolin_admin_password != "" ? var.pangolin_admin_password : random_string.pangolin_admin_password.result
+    cloudflare_email = var.cloudflare_email
+    cloudflare_api_token = var.cloudflare_api_token
+  }
+}
+
+data "template_file" "improved_deploy" {
+  template = file("${path.module}/scripts/improved_deploy.simple.sh")
+}
+
 data "template_cloudinit_config" "nodes" {
   gzip          = true
   base64_encode = true
@@ -128,6 +154,18 @@ data "template_cloudinit_config" "nodes" {
     content      = data.template_file.cloud_init.rendered
   }
 }
+
+
+data "template_file" "pangolin_config_template" {
+  template = file("${path.module}/scripts/pangolin-config.template.json")
+
+  vars = {
+    domain_name             = var.domain_name != "" ? var.domain_name : "example.com"
+    pangolin_token          = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
+    pangolin_admin_password = var.pangolin_admin_password != "" ? var.pangolin_admin_password : random_string.pangolin_admin_password.result
+  }
+}
+
 data "template_file" "cloud_init" {
   template = file("${path.module}/scripts/cloud-config.template.yaml")
 
@@ -135,55 +173,47 @@ data "template_file" "cloud_init" {
     setup_preflight_sh_content     = base64gzip(data.template_file.setup_preflight.rendered)
     setup_template_sh_content      = base64gzip(data.template_file.setup_template.rendered)
     deploy_template_content        = base64gzip(data.template_file.deploy_template.rendered)
+    improved_swarm_init_content    = base64gzip(data.template_file.improved_swarm_init.rendered)
+    improved_deploy_content        = base64gzip(data.template_file.improved_deploy.rendered)
     catalogue_sql_template_content = base64gzip(data.template_file.catalogue_sql_template.rendered)
     docker_compose_yml_content     = base64gzip(data.template_file.docker_compose_template.rendered)
-    catalogue_password             = random_string.catalogue_db_password.result
-    catalogue_port                 = local.catalogue_port
-    mock_mode                      = var.services_in_mock_mode
+    pangolin_config_content        = base64gzip(data.template_file.pangolin_config_template.rendered)
     deploy_id                      = random_string.deploy_id.result
     region_id                      = var.region
-    s3_secret                      = oci_identity_customer_secret_key.oci_user.key
-    s3_key_id                      = oci_identity_customer_secret_key.oci_user.id
-    object_namespace               = oci_objectstorage_bucket.registry.namespace
-    db_name                        = var.deploy_database ? oci_database_autonomous_database.oci_swarm_autonomous_database[0].db_name : ""
-    assets_url                     = var.object_storage_oci_swarm_media_visibility == "Private" ? "" : "https://objectstorage.${var.region}.oraclecloud.com/n/${oci_objectstorage_bucket.oci_swarm_media.namespace}/b/${oci_objectstorage_bucket.oci_swarm_media.name}/o/"
-    # Cloudflare and Pangolin variables
     cloudflare_email               = var.cloudflare_email
     cloudflare_api_token           = var.cloudflare_api_token
     pangolin_token                 = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
+    pangolin_admin_password        = var.pangolin_admin_password != "" ? var.pangolin_admin_password : random_string.pangolin_admin_password.result
     domain_name                    = var.domain_name
-    # Deployment options
-    deploy_database                = var.deploy_database ? "true" : "false"
-    deploy_web_app                 = var.deploy_web_app ? "true" : "false"
+    deploy_database                = var.deploy_database
+    deploy_web_app                 = var.deploy_web_app
+    catalogue_port                 = local.catalogue_port
+    catalogue_password             = random_string.catalogue_db_password.result
+    db_name                        = var.autonomous_database_name
+    mock_mode                      = "false"
+    assets_url                     = ""
+    object_namespace               = data.oci_objectstorage_namespace.user_namespace.namespace
+    s3_secret                      = ""
+    s3_key_id                      = ""
   }
 }
 data "template_file" "setup_preflight" {
   template = file("${path.module}/scripts/setup.preflight.sh")
 }
 data "template_file" "setup_template" {
-  template = file("${path.module}/scripts/setup.template.sh")
+  template = file("${path.module}/scripts/improved_setup.template.simple.sh")
 
   vars = {
-    oracle_client_version = var.oracle_client_version
-    public_key_openssh = tls_private_key.compute_ssh_key.public_key_openssh
-    private_key_pem  = tls_private_key.compute_ssh_key.private_key_pem
+    BASE_HOSTNAME = "swarm-node"
+    domain_name = var.domain_name
+    pangolin_token = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
+    pangolin_admin_password = var.pangolin_admin_password != "" ? var.pangolin_admin_password : random_string.pangolin_admin_password.result
+    cloudflare_email = var.cloudflare_email
+    cloudflare_api_token = var.cloudflare_api_token
   }
 }
 data "template_file" "deploy_template" {
-  template = file("${path.module}/scripts/deploy.template.sh")
-
-  vars = {
-    oracle_client_version   = var.oracle_client_version
-    db_name                 = var.deploy_database ? oci_database_autonomous_database.oci_swarm_autonomous_database[0].db_name : ""
-    atp_pw                  = random_string.autonomous_database_admin_password.result
-    oci_swarm_media_visibility = var.object_storage_oci_swarm_media_visibility
-    wallet_par              = var.deploy_database ? "https://objectstorage.${var.region}.oraclecloud.com${oci_objectstorage_preauthrequest.oci_swarm_wallet_preauth[0].access_uri}" : ""
-    cloudflare_email        = var.cloudflare_email
-    cloudflare_api_token    = var.cloudflare_api_token
-    pangolin_token          = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
-    domain_name             = var.domain_name
-    deploy_id               = random_string.deploy_id.result
-  }
+  template = file("${path.module}/scripts/improved_deploy.simple.sh")
 }
 data "template_file" "catalogue_sql_template" {
   template = file("${path.module}/scripts/catalogue.template.sql")
@@ -196,11 +226,21 @@ data "template_file" "docker_compose_template" {
   template = file("${path.module}/scripts/docker-compose.template.yml")
 
   vars = {
-    cloudflare_email    = var.cloudflare_email
-    cloudflare_api_token = var.cloudflare_api_token
-    pangolin_token      = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
-    domain_name         = var.domain_name
-    deploy_id           = random_string.deploy_id.result
+    cloudflare_config       = local.use_cloudflare ? join("\n            ", [
+      "- \"--certificatesresolvers.cloudflare.acme.email=${var.cloudflare_email}\"",
+      "- \"--certificatesresolvers.cloudflare.acme.storage=/data/acme.json\"",
+      "- \"--certificatesresolvers.cloudflare.acme.dnschallenge=true\"",
+      "- \"--certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare\""
+    ]) : "- \"--insecureskipverify=true\""
+    cloudflare_env          = local.use_cloudflare ? join("\n            ", [
+      "- CLOUDFLARE_EMAIL=${var.cloudflare_email}",
+      "- CLOUDFLARE_API_KEY=${var.cloudflare_api_token}"
+    ]) : "# No Cloudflare credentials provided"
+    tls_config              = local.use_cloudflare ? "certresolver=cloudflare" : ""
+    pangolin_token          = var.pangolin_token != "" ? var.pangolin_token : random_string.pangolin_token.result
+    pangolin_admin_password = var.pangolin_admin_password != "" ? var.pangolin_admin_password : random_string.pangolin_admin_password.result
+    domain_name             = var.domain_name != "" ? var.domain_name : "example.com"
+    deploy_id               = random_string.deploy_id.result
   }
 }
 locals {

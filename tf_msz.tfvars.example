@@ -23,7 +23,7 @@ compartment_ocid = "ocid1.compartment...."
 region = "us-phoenix-1"
 
 # Compute
-num_nodes                           = 2
+num_nodes                           = 4
 instance_shape                      = "VM.Standard2.1"
 instance_visibility                 = "Private"
 generate_public_ssh_key             = true

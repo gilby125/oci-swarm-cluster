@@ -498,6 +498,31 @@ ssh -i private_key.pem opc@<instance-ip> "sudo docker service scale swarm_regist
 
 **Solution:**
 - Verify the health check endpoint is accessible
+- Check if the health check path is correctly configured
+- Ensure the backend instance is listening on the correct port
+- Verify firewall rules allow traffic from the load balancer to the backend
+
+### 4. Duplicate DNS Records
+
+**Problem:** Multiple DNS records exist for the same subdomain, pointing to different IP addresses, causing inconsistent behavior or Cloudflare 520 errors.
+
+**Solution:**
+- Use the provided cleanup script to remove duplicate DNS records:
+  ```bash
+  # Set your Cloudflare credentials as environment variables
+  export CLOUDFLARE_API_TOKEN="your_api_token"
+  export CLOUDFLARE_ZONE_ID="your_zone_id"
+
+  # Run the cleanup script
+  ./scripts/cleanup_dns.sh
+  ```
+- Verify DNS records are correctly configured:
+  ```bash
+  # Check DNS records for a specific subdomain
+  dig @8.8.8.8 portainer.yourdomain.com
+  ```
+- Ensure the Terraform configuration uses `allow_overwrite = true` for DNS records
+- Use the `lifecycle { create_before_destroy = true }` directive in the Terraform configuration for DNS records
 - Check the health check configuration (port, path, protocol)
 - Ensure the health check endpoint returns the expected status code
 

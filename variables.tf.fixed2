@@ -1,0 +1,137 @@
+# Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
+# Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
+#
+
+variable "tenancy_ocid" {
+}
+
+variable "compartment_ocid" {
+}
+
+variable "region" {
+}
+
+variable "num_nodes" {
+  default = "4"
+}
+
+variable "instance_shape" {
+  default = "VM.Standard.A1.Flex"
+}
+
+variable "instance_ocpus" {
+  default = 1
+}
+
+variable "instance_shape_config_memory_in_gbs" {
+  default = 6
+}
+
+variable "instance_os" {
+  default = "Oracle Linux"
+}
+
+variable "linux_os_version" {
+  default = "8"
+}
+
+variable "image_operating_system" {
+  default = "Oracle Linux"
+}
+
+variable "image_operating_system_version" {
+  default = "8"
+}
+
+variable "deploy_database" {
+  default = false
+}
+
+variable "autonomous_database_cpu_core_count" {
+  default = 1
+}
+
+variable "autonomous_database_data_storage_size_in_tbs" {
+  default = 1
+}
+
+variable "autonomous_database_db_name" {
+  default = "ociswarm"
+}
+
+variable "autonomous_database_db_version" {
+  default = "19c"
+}
+
+variable "autonomous_database_display_name" {
+  default = "ociswarm"
+}
+
+variable "autonomous_database_is_auto_scaling_enabled" {
+  default = false
+}
+
+variable "autonomous_database_license_model" {
+  default = "LICENSE_INCLUDED"
+}
+
+variable "domain_name" {
+  type        = string
+  description = "Domain name for the services"
+  default     = ""
+}
+
+variable "cloudflare_email" {
+  type        = string
+  description = "Cloudflare Email for DNS challenges"
+  default     = ""
+}
+
+variable "cloudflare_api_token" {
+  type        = string
+  description = "Cloudflare API Token for DNS challenges"
+  default     = ""
+}
+
+variable "pangolin_token" {
+  type        = string
+  description = "Token for the Pangolin service"
+  default     = ""
+}
+
+# Additional variables needed for the codebase
+variable "generate_public_ssh_key" {
+  default = true
+}
+
+variable "object_storage_oci_swarm_media_compartment_ocid" {
+  default = ""
+}
+
+variable "lb_compartment_ocid" {
+  default = ""
+}
+
+variable "user_admin_group_for_vault_policy" {
+  default = "Administrators"
+}
+
+variable "user_ocid" {
+  default = ""
+}
+
+variable "fingerprint" {
+  default = ""
+}
+
+variable "private_key_path" {
+  default = ""
+}
+
+variable "use_only_always_free_elegible_resources" {
+  default = false
+}
+
+variable "create_secondary_vcn" {
+  default = false
+}

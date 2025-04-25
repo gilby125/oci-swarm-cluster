@@ -1,0 +1,84 @@
+version: '3.8'
+
+name: pangolin
+
+services:
+  pangolin:
+    image: fosrl/pangolin:latest
+    container_name: pangolin
+    restart: unless-stopped
+    volumes:
+      - pangolin_config:/app/config
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/v1/"]
+      interval: "3s"
+      timeout: "3s"
+      retries: 5
+    environment:
+      - PANGOLIN_DOMAIN=admin-pangolin.throughfire.net
+      - PANGOLIN_ADMIN_EMAIL=admin@throughfire.net
+      - PANGOLIN_ADMIN_PASSWORD=B9D4VcWM62u88Uch7ZoXurupWU560ft7
+      - PANGOLIN_JWT_SECRET=B9D4VcWM62u88Uch7ZoXurupWU560ft7
+      - PANGOLIN_DB_TYPE=sqlite
+      - PANGOLIN_DB_PATH=/app/config/pangolin.db
+    networks:
+      - pangolin_network
+      - lb_network
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=lb_network
+        - traefik.constraint-label=traefik-public
+        - traefik.http.routers.pangolin.rule=Host(`admin-pangolin.throughfire.net`)
+        - traefik.http.routers.pangolin.entrypoints=https
+        - traefik.http.routers.pangolin.tls=true
+        - traefik.http.routers.pangolin.tls.certresolver=cloudflare
+        - traefik.http.services.pangolin.loadbalancer.server.port=3001
+        # Add HTTP router for pangolin to handle redirects
+        - traefik.http.routers.pangolin-http.rule=Host(`admin-pangolin.throughfire.net`)
+        - traefik.http.routers.pangolin-http.entrypoints=http
+        - traefik.http.middlewares.pangolin-https-redirect.redirectscheme.scheme=https
+        - traefik.http.routers.pangolin-http.middlewares=pangolin-https-redirect
+
+  gerbil:
+    image: fosrl/gerbil:latest
+    container_name: gerbil
+    restart: unless-stopped
+    depends_on:
+      pangolin:
+        condition: service_healthy
+    command:
+      - --reachableAt=http://gerbil:3003
+      - --generateAndSaveKeyTo=/var/config/key
+      - --remoteConfig=http://pangolin:3001/api/v1/gerbil/get-config
+      - --reportBandwidthTo=http://pangolin:3001/api/v1/gerbil/receive-bandwidth
+    volumes:
+      - pangolin_config:/var/config
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    networks:
+      - pangolin_network
+      - lb_network
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+volumes:
+  pangolin_config:
+    driver: local
+
+networks:
+  pangolin_network:
+    driver: overlay
+    attachable: true
+  lb_network:
+    external: true

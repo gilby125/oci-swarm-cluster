@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  pangolin:
+    image: fosrl/pangolin:latest
+    container_name: pangolin
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - PANGOLIN_DOMAIN=admin-pangolin.throughfire.net
+      - PANGOLIN_ADMIN_EMAIL=admin@throughfire.net
+      - PANGOLIN_ADMIN_PASSWORD=${PANGOLIN_ADMIN_PASSWORD:-changeme}
+      - PANGOLIN_JWT_SECRET=${PANGOLIN_JWT_SECRET:-B9D4VcWM62u88Uch7ZoXurupWU560ft7}
+      - PANGOLIN_DB_TYPE=sqlite
+      - PANGOLIN_DB_PATH=/data/pangolin.db
+      - PANGOLIN_LETSENCRYPT_EMAIL=admin@throughfire.net
+      - PANGOLIN_LETSENCRYPT_SERVER=https://acme-v02.api.letsencrypt.org/directory
+    volumes:
+      - pangolin_data:/data
+      - pangolin_certs:/certs
+    networks:
+      - lb_network
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      labels:
+        - "traefik.enable=true"
+        - "traefik.constraint-label=traefik-public"
+        - "traefik.http.routers.pangolin.rule=Host(`admin-pangolin.throughfire.net`)"
+        - "traefik.http.routers.pangolin.entrypoints=https"
+        - "traefik.http.routers.pangolin.tls=true"
+        - "traefik.http.services.pangolin.loadbalancer.server.port=80"
+
+volumes:
+  pangolin_data:
+  pangolin_certs:
+
+networks:
+  lb_network:
+    external: true

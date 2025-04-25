@@ -1,0 +1,31 @@
+Domain: throughfire.net
+Load Balancer IP: 207.211.162.13
+Compute Instance 0 IP: 131.186.6.2
+true
+Compute Instance 1 IP: 207.211.168.251
+true
+DNS Records:
+  admin-pangolin.throughfire.net -> 207.211.162.13 (proxied: true)
+  dev-oci.throughfire.net -> 207.211.162.13 (proxied: true)
+  local.throughfire.net -> 207.211.162.13 (proxied: true)
+  local-version.throughfire.net -> 207.211.162.13 (proxied: true)
+  portainer-version.throughfire.net -> 207.211.162.13 (proxied: true)
+  registry.throughfire.net -> 207.211.162.13 (proxied: true)
+  registry-version.throughfire.net -> 207.211.162.13 (proxied: true)
+
+Endpoints:
+  Load Balancer: http://207.211.162.13
+  Portainer UI: https://dev-oci.throughfire.net
+  Registry: https://registry.throughfire.net
+  Registry API: https://registry.throughfire.net/v2/
+  Local Proxy: https://local.throughfire.net
+  Pangolin Admin: https://admin-pangolin.throughfire.net
+  Portainer Version: https://portainer-version.throughfire.net
+  Registry Version: https://registry-version.throughfire.net
+  Local Version: https://local-version.throughfire.net
+
+SSH Commands:
+  Instance 0: ssh -i ~/.ssh/id_rsa opc@131.186.6.2
+true
+  Instance 1: ssh -i ~/.ssh/id_rsa opc@207.211.168.251
+true

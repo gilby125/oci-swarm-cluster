@@ -1,0 +1,167 @@
+#!/bin/bash
+# Improved deployment script for Docker Swarm
+
+# Source the improved swarm initialization script
+source /root/improved_swarm_init.sh
+
+# Function to get the public and private IPs
+get_ips() {
+    PUBLIC_IP=$(curl -s http://169.254.169.254/opc/v1/instance/public-ip)
+    PRIVATE_IP=$(curl -s http://169.254.169.254/opc/v1/instance/private-ip)
+    
+    log_message "INFO" "Public IP: $PUBLIC_IP"
+    log_message "INFO" "Private IP: $PRIVATE_IP"
+}
+
+# Main function
+main() {
+    log_message "INFO" "Starting Docker Swarm deployment..."
+    
+    # Get the public and private IPs
+    get_ips
+    
+    # Check if Docker Swarm is already initialized
+    if docker info | grep -q "Swarm: active"; then
+        log_message "INFO" "Swarm is already initialized."
+    else
+        # Initialize Docker Swarm
+        log_message "INFO" "Initializing Docker Swarm..."
+        if ! init_swarm_manager "$PRIVATE_IP"; then
+            log_message "ERROR" "Failed to initialize Docker Swarm. Trying with public IP..."
+            if ! init_swarm_manager "$PUBLIC_IP"; then
+                log_message "ERROR" "Failed to initialize Docker Swarm with both private and public IPs. Exiting."
+                exit 1
+            fi
+        fi
+    fi
+    
+    # Create overlay networks
+    log_message "INFO" "Creating overlay networks..."
+    if ! create_overlay_networks; then
+        log_message "ERROR" "Failed to create overlay networks. Exiting."
+        exit 1
+    fi
+    
+    # Set up environment variables
+    log_message "INFO" "Setting up environment variables..."
+    
+    # Check if environment variables are already set in .bashrc
+    if grep -q "DOMAIN_NAME" /root/.bashrc && grep -q "PANGOLIN_TOKEN" /root/.bashrc; then
+        log_message "INFO" "Environment variables are already set"
+    else
+        # Add environment variables to .bashrc
+        cat << EOF2 >> /root/.bashrc
+export DOMAIN_NAME=\$(cat /root/swarm.env | grep DOMAIN_NAME | cut -d= -f2)
+export PANGOLIN_TOKEN=\$(cat /root/swarm.env | grep PANGOLIN_TOKEN | cut -d= -f2)
+EOF2
+
+        # Add Cloudflare credentials if they exist
+        if grep -q "CLOUDFLARE_EMAIL" /root/swarm.env && grep -q "CLOUDFLARE_API_TOKEN" /root/swarm.env; then
+            cat << EOF2 >> /root/.bashrc
+export CLOUDFLARE_EMAIL=\$(cat /root/swarm.env | grep CLOUDFLARE_EMAIL | cut -d= -f2)
+export CLOUDFLARE_API_TOKEN=\$(cat /root/swarm.env | grep CLOUDFLARE_API_TOKEN | cut -d= -f2)
+EOF2
+        fi
+        
+        # Source the environment variables
+        source /root/.bashrc
+    fi
+    
+    # Create Traefik configuration
+    log_message "INFO" "Creating Traefik configuration..."
+    
+    # Create log directory for Traefik
+    mkdir -p /var/log/traefik
+    chmod 755 /var/log/traefik
+    
+    # Create dynamic configuration for Traefik
+    cat > /root/traefik_dynamic_conf.toml << EOF2
+[http.middlewares]
+  [http.middlewares.secure-headers.headers]
+    sslRedirect = true
+    stsSeconds = 31536000
+    stsIncludeSubdomains = true
+    stsPreload = true
+    forceSTSHeader = true
+    frameDeny = true
+    customFrameOptionsValue = "SAMEORIGIN"
+    contentTypeNosniff = true
+    browserXssFilter = true
+    customBrowserXSSValue = "1; mode=block"
+    contentSecurityPolicy = "default-src 'self'; frame-ancestors 'self'"
+    referrerPolicy = "same-origin"
+EOF2
+    
+    # Deploy the stack
+    log_message "INFO" "Deploying the stack..."
+    if [ -f "/root/docker-compose.yml" ]; then
+        # Process environment variables in the compose file
+        log_message "INFO" "Processing environment variables in compose file..."
+        envsubst < "/root/docker-compose.yml" > "/root/docker-compose.yml.processed"
+        
+        # Deploy the stack
+        log_message "INFO" "Deploying stack..."
+        if ! docker stack deploy -c "/root/docker-compose.yml.processed" swarm; then
+            log_message "ERROR" "Failed to deploy stack. Exiting."
+            exit 1
+        fi
+    else
+        log_message "ERROR" "docker-compose.yml not found! Exiting."
+        exit 1
+    fi
+    
+    # Check stack status
+    log_message "INFO" "Checking stack status..."
+    
+    # Wait for services to be created
+    log_message "INFO" "Waiting for services to be created..."
+    sleep 10
+    
+    # Check service status
+    local services=$(docker stack services swarm --format "{{.Name}} {{.Replicas}}")
+    log_message "INFO" "Services status:"
+    echo "$services"
+    
+    # Check for services with 0 replicas
+    if echo "$services" | grep -q "0/"; then
+        log_message "WARN" "Some services have 0 replicas running. Attempting to fix..."
+        
+        # Get list of services with 0 replicas
+        local zero_replicas=$(echo "$services" | grep "0/" | awk '{print $1}')
+        
+        # Try to update each service with 0 replicas
+        for service in $zero_replicas; do
+            log_message "INFO" "Attempting to fix service: $service"
+            docker service update --force $service
+        done
+        
+        # Check service status again
+        log_message "INFO" "Checking service status after fixes..."
+        services=$(docker stack services swarm --format "{{.Name}} {{.Replicas}}")
+        echo "$services"
+        
+        if echo "$services" | grep -q "0/"; then
+            log_message "WARN" "Some services still have 0 replicas running"
+        else
+            log_message "INFO" "All services are now running"
+        fi
+    else
+        log_message "INFO" "All services are running"
+    fi
+    
+    # Display access information
+    log_message "INFO" "Deployment completed successfully."
+    log_message "INFO" "You can access the services at:"
+    log_message "INFO" "- Traefik Dashboard: https://traefik.${DOMAIN_NAME:-example.com}"
+    log_message "INFO" "- Portainer: https://portainer.${DOMAIN_NAME:-example.com}"
+    log_message "INFO" "- Registry: https://registry.${DOMAIN_NAME:-example.com}"
+    log_message "INFO" "- Whoami: https://whoami.${DOMAIN_NAME:-example.com}"
+    log_message "INFO" "- Pangolin: https://admin-pangolin.${DOMAIN_NAME:-example.com}"
+    log_message "INFO" "- Local Proxy: https://local.${DOMAIN_NAME:-example.com}"
+    log_message "INFO" "- Load Balancer IP: ${PUBLIC_IP}"
+    
+    exit 0
+}
+
+# Execute the main function
+main

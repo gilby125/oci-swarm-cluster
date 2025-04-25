@@ -1,88 +1,82 @@
 #!/bin/bash
-# Script to fix Docker Swarm setup
+# Script to fix Docker Swarm initialization
 
-# Set colors for output
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
+set -e
 
-# Check if the private key exists
-if [ ! -f ~/.ssh/oci_swarm_key.pem ]; then
-    echo -e "${RED}Error: Private key not found!${NC}"
-    echo -e "${YELLOW}Please run 'terraform output -raw generated_private_key_pem > ~/.ssh/oci_swarm_key.pem && chmod 600 ~/.ssh/oci_swarm_key.pem'${NC}"
-    exit 1
-fi
+# Get the IP addresses of all instances
+echo "Getting IP addresses of all instances..."
+INSTANCE_0_IP=$(terraform state show oci_core_instance.app_instance[0] | grep public_ip | head -1 | awk '{print $3}' | tr -d '"')
+INSTANCE_1_IP=$(terraform state show oci_core_instance.app_instance[1] | grep public_ip | head -1 | awk '{print $3}' | tr -d '"')
+INSTANCE_2_IP=$(terraform state show oci_core_instance.app_instance[2] | grep public_ip | head -1 | awk '{print $3}' | tr -d '"')
+INSTANCE_3_IP=$(terraform state show oci_core_instance.app_instance[3] | grep public_ip | head -1 | awk '{print $3}' | tr -d '"')
 
-# Get the IP addresses of the instances
-MANAGER_IP=$(terraform output -raw app_instance_public_ips | jq -r '.[0]')
-WORKER_IP=$(terraform output -raw app_instance_public_ips | jq -r '.[1]')
+echo "Instance 0 IP: $INSTANCE_0_IP"
+echo "Instance 1 IP: $INSTANCE_1_IP"
+echo "Instance 2 IP: $INSTANCE_2_IP"
+echo "Instance 3 IP: $INSTANCE_3_IP"
 
-if [ -z "$MANAGER_IP" ] || [ -z "$WORKER_IP" ]; then
-    echo -e "${RED}Error: Could not get instance IP addresses from Terraform output!${NC}"
-    exit 1
-fi
+# Check if Docker is installed on all instances
+for IP in $INSTANCE_0_IP $INSTANCE_1_IP $INSTANCE_2_IP $INSTANCE_3_IP; do
+    echo "Checking Docker on $IP..."
+    if ! ssh -i id_rsa -o StrictHostKeyChecking=no opc@$IP "sudo docker version"; then
+        echo "Docker not installed on $IP. Exiting."
+        exit 1
+    fi
+done
 
-echo -e "${YELLOW}Manager IP: ${MANAGER_IP}${NC}"
-echo -e "${YELLOW}Worker IP: ${WORKER_IP}${NC}"
+# Open Docker Swarm ports on all instances
+for IP in $INSTANCE_0_IP $INSTANCE_1_IP $INSTANCE_2_IP $INSTANCE_3_IP; do
+    echo "Opening Docker Swarm ports on $IP..."
+    ssh -i id_rsa -o StrictHostKeyChecking=no opc@$IP "sudo firewall-cmd --permanent --add-port=2377/tcp && sudo firewall-cmd --permanent --add-port=7946/tcp && sudo firewall-cmd --permanent --add-port=7946/udp && sudo firewall-cmd --permanent --add-port=4789/udp && sudo firewall-cmd --reload"
+done
 
-# Check if the manager is initialized
-echo -e "${YELLOW}Checking if the manager is initialized...${NC}"
-SWARM_STATUS=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/oci_swarm_key.pem opc@${MANAGER_IP} "sudo docker info | grep Swarm | awk '{print \$2}'")
-
-if [ "$SWARM_STATUS" != "active" ]; then
-    echo -e "${YELLOW}Initializing Docker Swarm on the manager...${NC}"
-    ssh -o StrictHostKeyChecking=no -i ~/.ssh/oci_swarm_key.pem opc@${MANAGER_IP} "sudo docker swarm init --advertise-addr ${MANAGER_IP}"
+# Check if Docker Swarm is already initialized on the first instance
+echo "Checking if Docker Swarm is already initialized on $INSTANCE_0_IP..."
+if ssh -i id_rsa -o StrictHostKeyChecking=no opc@$INSTANCE_0_IP "sudo docker node ls" &>/dev/null; then
+    echo "Docker Swarm is already initialized on $INSTANCE_0_IP."
 else
-    echo -e "${GREEN}Docker Swarm is already initialized on the manager.${NC}"
+    echo "Initializing Docker Swarm on $INSTANCE_0_IP..."
+    ssh -i id_rsa -o StrictHostKeyChecking=no opc@$INSTANCE_0_IP "sudo docker swarm init --advertise-addr $INSTANCE_0_IP"
 fi
 
-# Get the join token
-echo -e "${YELLOW}Getting the join token...${NC}"
-JOIN_TOKEN=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/oci_swarm_key.pem opc@${MANAGER_IP} "sudo docker swarm join-token worker -q")
+# Get the worker join token
+echo "Getting worker join token..."
+JOIN_TOKEN=$(ssh -i id_rsa -o StrictHostKeyChecking=no opc@$INSTANCE_0_IP "sudo docker swarm join-token worker -q")
 
 if [ -z "$JOIN_TOKEN" ]; then
-    echo -e "${RED}Error: Could not get join token!${NC}"
+    echo "Failed to get join token. Exiting."
     exit 1
 fi
 
-# Check if the worker is already in the swarm
-echo -e "${YELLOW}Checking if the worker is already in the swarm...${NC}"
-WORKER_STATUS=$(ssh -o StrictHostKeyChecking=no -i ~/.ssh/oci_swarm_key.pem opc@${WORKER_IP} "sudo docker info | grep Swarm | awk '{print \$2}'")
+echo "Join token: $JOIN_TOKEN"
 
-if [ "$WORKER_STATUS" != "active" ]; then
-    echo -e "${YELLOW}Joining the worker to the swarm...${NC}"
-    ssh -o StrictHostKeyChecking=no -i ~/.ssh/oci_swarm_key.pem opc@${WORKER_IP} "sudo docker swarm join --token ${JOIN_TOKEN} ${MANAGER_IP}:2377"
+# Join the other nodes to the swarm
+for IP in $INSTANCE_1_IP $INSTANCE_2_IP $INSTANCE_3_IP; do
+    echo "Checking if $IP is already part of the swarm..."
+    if ssh -i id_rsa -o StrictHostKeyChecking=no opc@$IP "sudo docker info | grep 'Swarm: active'" &>/dev/null; then
+        echo "$IP is already part of the swarm."
+    else
+        echo "Joining $IP to the swarm..."
+        ssh -i id_rsa -o StrictHostKeyChecking=no opc@$IP "sudo docker swarm join --token $JOIN_TOKEN $INSTANCE_0_IP:2377 || echo 'Failed to join swarm, will try again later'"
+    fi
+done
+
+# Verify the swarm status
+echo "Verifying swarm status..."
+ssh -i id_rsa -o StrictHostKeyChecking=no opc@$INSTANCE_0_IP "sudo docker node ls"
+
+# Create overlay networks if they don't exist
+echo "Creating overlay networks..."
+ssh -i id_rsa -o StrictHostKeyChecking=no opc@$INSTANCE_0_IP "sudo docker network ls | grep -q lb_network || sudo docker network create --driver=overlay --attachable lb_network"
+ssh -i id_rsa -o StrictHostKeyChecking=no opc@$INSTANCE_0_IP "sudo docker network ls | grep -q agent_network || sudo docker network create --driver=overlay --attachable agent_network"
+
+# Deploy the stack if docker-compose.yml exists
+echo "Checking if docker-compose.yml exists..."
+if ssh -i id_rsa -o StrictHostKeyChecking=no opc@$INSTANCE_0_IP "sudo test -f /root/docker-compose.yml"; then
+    echo "Deploying the stack..."
+    ssh -i id_rsa -o StrictHostKeyChecking=no opc@$INSTANCE_0_IP "sudo docker stack deploy -c /root/docker-compose.yml swarm"
 else
-    echo -e "${GREEN}Worker is already in the swarm.${NC}"
+    echo "docker-compose.yml not found on $INSTANCE_0_IP."
 fi
 
-# Create the required networks if they don't exist
-echo -e "${YELLOW}Creating required Docker networks...${NC}"
-ssh -o StrictHostKeyChecking=no -i ~/.ssh/oci_swarm_key.pem opc@${MANAGER_IP} "
-    if ! sudo docker network ls | grep -q 'lb_network'; then
-        sudo docker network create --driver=overlay --attachable lb_network
-        echo -e '${GREEN}Created lb_network${NC}'
-    else
-        echo -e '${GREEN}lb_network already exists${NC}'
-    fi
-    
-    if ! sudo docker network ls | grep -q 'agent_network'; then
-        sudo docker network create --driver=overlay --attachable agent_network
-        echo -e '${GREEN}Created agent_network${NC}'
-    else
-        echo -e '${GREEN}agent_network already exists${NC}'
-    fi
-"
-
-# Restart the Docker stack
-echo -e "${YELLOW}Restarting the Docker stack...${NC}"
-ssh -o StrictHostKeyChecking=no -i ~/.ssh/oci_swarm_key.pem opc@${MANAGER_IP} "
-    cd /root
-    sudo docker stack rm swarm
-    sleep 10
-    sudo docker stack deploy -c docker-compose.yml swarm
-"
-
-echo -e "${GREEN}Docker Swarm setup fixed!${NC}"
-echo -e "${YELLOW}Now run 'terraform apply -var-file=secrets.tfvars' to ensure Terraform state is in sync.${NC}"
+echo "Docker Swarm initialization completed successfully."

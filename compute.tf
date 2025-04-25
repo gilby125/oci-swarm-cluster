@@ -19,7 +19,7 @@ resource "oci_core_instance" "app_instance" {
   create_vnic_details {
     subnet_id        = oci_core_subnet.oci_swarm_main_subnet.id
     display_name     = "primaryvnic"
-    assign_public_ip = (var.instance_visibility == "Private") ? false : true
+    assign_public_ip = count.index == 0 ? true : false  # Only assign public IP to the manager node (index 0)
     hostname_label   = "oci-swarm-${random_string.deploy_id.result}-${count.index}"
   }
 

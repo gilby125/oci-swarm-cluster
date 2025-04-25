@@ -1,0 +1,118 @@
+#cloud-config
+
+write_files:
+# setup script
+  - path: "/root/setup.preflight.sh"
+    permissions: "0777"
+    encoding: "gzip+base64"
+    content: |
+      ${setup_preflight_sh_content}
+  - path: "/root/setup.sh"
+    permissions: "0777"
+    encoding: "gzip+base64"
+    content: |
+      ${setup_template_sh_content}
+  - path: "/root/deploy.sh"
+    permissions: "0777"
+    encoding: "gzip+base64"
+    content: |
+      ${deploy_template_content}
+  - path: "/root/improved_swarm_init.sh"
+    permissions: "0777"
+    encoding: "gzip+base64"
+    content: |
+      ${improved_swarm_init_content}
+  - path: "/root/improved_deploy.sh"
+    permissions: "0777"
+    encoding: "gzip+base64"
+    content: |
+      ${improved_deploy_content}
+  - path: "/root/catalogue.sql"
+    permissions: "0777"
+    encoding: "gzip+base64"
+    content: |
+      ${catalogue_sql_template_content}
+  - path: "/root/docker-compose.yml"
+    permissions: "0777"
+    encoding: "gzip+base64"
+    content: |
+      ${docker_compose_yml_content}
+  - path: "/root/traefik_dynamic_conf.toml"
+    permissions: "0644"
+    content: |
+      [http.middlewares]
+        [http.middlewares.secure-headers.headers]
+          sslRedirect = true
+          stsSeconds = 31536000
+          stsIncludeSubdomains = true
+          stsPreload = true
+          forceSTSHeader = true
+          frameDeny = true
+          customFrameOptionsValue = "SAMEORIGIN"
+          contentTypeNosniff = true
+          browserXssFilter = true
+          customBrowserXSSValue = "1; mode=block"
+          contentSecurityPolicy = "default-src 'self'; frame-ancestors 'self'"
+          referrerPolicy = "same-origin"
+  - path: "/root/nginx.conf"
+    permissions: "0644"
+    content: |
+      events {
+          worker_connections 1024;
+      }
+
+      http {
+          server {
+              listen 80;
+              server_name localhost;
+
+              location / {
+                  root /usr/share/nginx/html;
+                  index index.html;
+              }
+          }
+      }
+  - path: "/root/swarm.env"
+    permissions: "0644"
+    content: |
+      # Environment variables for Docker Swarm
+      DEPLOY_ID=${deploy_id}
+      REGION_ID=${region_id}
+      DOMAIN_NAME=${domain_name}
+      PANGOLIN_TOKEN=${pangolin_token}
+      PANGOLIN_ADMIN_PASSWORD=${pangolin_admin_password}
+      CLOUDFLARE_EMAIL=${cloudflare_email}
+      CLOUDFLARE_API_TOKEN=${cloudflare_api_token}
+      # Manager node IP for worker nodes to join - will be set by the setup script
+      # Default value is the private IP of the first node
+      MANAGER_IP=10.0.1.11
+  - path: "/root/pangolin-config.json"
+    permissions: "0644"
+    content: |
+      {
+        "domain": "admin-pangolin.${domain_name}",
+        "adminEmail": "admin@${domain_name}",
+        "adminPassword": "${pangolin_admin_password}",
+        "jwtSecret": "${pangolin_token}",
+        "database": {
+          "type": "sqlite",
+          "path": "/app/config/pangolin.db"
+        },
+        "server": {
+          "port": 3001,
+          "host": "0.0.0.0"
+        }
+      }
+
+runcmd:
+  - echo "Starting setup..."
+  - mkdir -p /var/log/traefik
+  - chmod 755 /var/log/traefik
+  - chmod +x /root/setup.preflight.sh
+  - /root/setup.preflight.sh
+  - chmod +x /root/setup.sh
+  - /root/setup.sh
+  - chmod +x /root/improved_deploy.sh
+  - source /root/swarm.env
+  - /root/improved_deploy.sh
+  - echo "Setup complete!"

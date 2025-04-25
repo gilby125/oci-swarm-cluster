@@ -1,6 +1,6 @@
 # A Docker Swarm Cluster deployed as terraform scripts
 
-This is a Terraform configuration that deploys a two node Swarm cluster on [Oracle Cloud Infrastructure (OCI)][oci].
+This is a Terraform configuration that deploys a four node Swarm cluster on [Oracle Cloud Infrastructure (OCI)][oci].
 
 It also includes an HA storage implemented in GlusterFS and docker plugins for Gluster FS and Oracle Object Storage.
 
@@ -14,7 +14,7 @@ The application uses a typical topology for a 3-tier web application as follows
 
 | Component             | What                                                                                                           | Why                                                                                                                                                                                                                                    | Learn                 |
 | --------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
-| Compute Instances     | 2 Always Free tier eligible compute instance                                                              | These VMs host the application                                                                                                                                                                                                         | [Learn More][inst]    |
+| Compute Instances     | 4 Always Free tier eligible compute instances                                                             | These VMs host the application                                                                                                                                                                                                         | [Learn More][inst]    |
 | Autonomous Database   | 1 Always Free tier eligible Autonomous Database instance (Optional)                                                      | The database used by the application. Can be disabled at apply time.                                                                                                                                                                                                  | [Learn More][adb]     |
 | Vault                 | Optional use of OCI Vault keys for Key Management (KMS).       | Encrypt boot volumes of the compute instances and Object Storage buckets.                                             | [Learn More][kms] |
 | Load Balancer         | 1 Always Free tier eligible load balancer                                                                      | Routes traffic between the nodes hosting the application                                                                                                                                                                               | [Learn More][lb]      |
@@ -115,16 +115,68 @@ This script will:
 4. Update the SSL setting to full_strict for maximum security
 5. Test connectivity to all configured domains
 
+#### Cleaning Up Stale DNS Records
+
+If you have previously deployed this infrastructure and are redeploying, you may encounter issues with stale DNS records. To clean up any stale DNS records before applying Terraform, use the provided cleanup script:
+
+```bash
+# Set your Cloudflare credentials as environment variables
+export CLOUDFLARE_API_TOKEN="your_api_token"
+export CLOUDFLARE_ZONE_ID="your_zone_id"
+
+# Run the cleanup script
+./scripts/cleanup_dns.sh
+```
+
+This script will:
+1. Fetch all DNS records for your domain
+2. Identify any duplicate records for the managed subdomains
+3. Keep only the most recent record for each subdomain
+4. Delete any stale or duplicate records
+
+Running this script before applying Terraform ensures that your DNS configuration is clean and prevents issues with duplicate records.
+
 ### Pangolin Integration
 
-Pangolin is used to create a secure tunnel to expose your local services to the internet. The Pangolin token is automatically generated if not provided. If you want to use a specific token:
+Pangolin is a self-hosted tunneled reverse proxy with identity and access management, designed to securely expose your local services to the internet. The Pangolin configuration has been updated to use the official image and provide a proper login page.
 
+#### Deployment:
+
+Pangolin is now integrated directly into the main Docker Compose file, ensuring proper configuration and connectivity:
+
+1. **Official Image**: Uses the official `fosrl/pangolin:latest` image
+2. **Proper Networking**: Connected to both the `lb_network` and `traefik-public` networks
+3. **Correct Port**: Configured to use port 3001 with direct port mapping
+4. **Data Persistence**: Uses a dedicated volume for data storage
+
+The Pangolin service is automatically deployed as part of the main Docker Swarm stack, simplifying the infrastructure and ensuring everything works correctly out of the box.
+
+#### Configuration Details:
+
+- The Pangolin service uses the official `fosrl/pangolin:latest` image
+- Proper environment variables are configured for authentication and database setup
+- A dedicated volume is created for data persistence
+- The service is exposed on port 3001
+- Traefik labels are configured for proper routing and HTTPS redirection
+
+#### Accessing Pangolin:
+
+You can access the Pangolin admin interface at `https://admin-pangolin.<your-domain>` using:
+- **Email**: `admin@<your-domain>`
+- **Password**: Your Pangolin admin password (generated or specified in terraform.tfvars)
+
+The password can be retrieved using:
+```bash
+terraform output pangolin_credentials
+```
+
+#### Custom Token:
+
+If you want to use a specific token for Pangolin:
 1. Uncomment the `pangolin_token` line in your terraform.tfvars file
 2. Set it to your desired token value
 
-The generated or provided token will be used to authenticate your Pangolin instance with the Pangolin service.
-
-You can access the Pangolin admin interface at `https://admin.pangolin.<your-domain>` using the username `admin` and your Pangolin token as the password.
+The generated or provided token will be used for internal authentication with the Pangolin service.
 
 ## Testing Your Deployment
 
@@ -166,6 +218,37 @@ The debugging guide covers:
 - Service health checks
 
 The guide provides step-by-step instructions for diagnosing and fixing each type of issue.
+
+### Docker Swarm Creation Fixes
+
+For issues specifically related to Docker Swarm creation and initialization, we've developed improved scripts with better error handling and retry logic. See [DOCKER_SWARM_FIXES.md](DOCKER_SWARM_FIXES.md) for details on:
+
+- Improved swarm initialization with retry logic
+- Better network creation with error handling
+- Enhanced environment variable handling
+- Automatic recovery for common failure scenarios
+- Improved synchronization between nodes
+
+The improved scripts are now used by default in this repository. They include:
+
+- Support for 4-node Docker Swarm clusters
+- Enhanced error handling and recovery mechanisms
+- Better Pangolin service integration
+- Automatic service recovery for failed services
+
+To apply these fixes to an existing deployment, run:
+
+```bash
+chmod +x improved_fix_swarm.sh
+./improved_fix_swarm.sh
+```
+
+For new deployments, simply run:
+
+```bash
+terraform init
+terraform apply -var-file=secrets.tfvars
+```
 
 [oci]: https://cloud.oracle.com/en_US/cloud-infrastructure
 [orm]: https://docs.cloud.oracle.com/iaas/Content/ResourceManager/Concepts/resourcemanager.htm

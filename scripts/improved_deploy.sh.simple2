@@ -1,0 +1,99 @@
+#!/bin/bash
+# Simplified deployment script for Docker Swarm
+
+# Source the improved swarm initialization script
+source /root/improved_swarm_init.sh
+
+# Function to deploy Docker Swarm stack
+deploy_stack() {
+    local compose_file=$1
+    local stack_name=$2
+    
+    log_message "INFO" "Deploying stack $stack_name from $compose_file"
+    
+    # Check if the compose file exists
+    if [ ! -f "$compose_file" ]; then
+        log_message "ERROR" "Compose file $compose_file not found"
+        return 1
+    fi
+    
+    # Deploy the stack
+    retry_command "docker stack deploy -c $compose_file $stack_name" "Deploy stack $stack_name"
+    
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Failed to deploy stack $stack_name"
+        return 1
+    fi
+    
+    log_message "INFO" "Stack $stack_name deployed successfully"
+    return 0
+}
+
+# Main function
+main() {
+    log_message "INFO" "Starting Docker Swarm deployment..."
+    
+    # Check if Docker is running
+    check_docker
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Docker check failed. Exiting."
+        exit 1
+    fi
+    
+    # Get the primary IP address
+    local primary_ip=$(hostname -I | awk '{print $1}')
+    if [ -z "$primary_ip" ]; then
+        log_message "ERROR" "Failed to get primary IP address. Exiting."
+        exit 1
+    fi
+    
+    log_message "INFO" "Primary IP address: $primary_ip"
+    
+    # Check if Docker Swarm is already initialized
+    if docker info | grep -q "Swarm: active"; then
+        log_message "INFO" "Swarm is already initialized."
+    else
+        # Initialize Docker Swarm
+        log_message "INFO" "Initializing Docker Swarm..."
+        init_swarm_manager "$primary_ip"
+        if [ $? -ne 0 ]; then
+            log_message "ERROR" "Failed to initialize Docker Swarm. Exiting."
+            exit 1
+        fi
+    fi
+    
+    # Create overlay networks
+    log_message "INFO" "Creating overlay networks..."
+    create_overlay_networks
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Failed to create overlay networks. Exiting."
+        exit 1
+    fi
+    
+    # Deploy the stack
+    log_message "INFO" "Deploying the stack..."
+    if [ -f "/root/docker-compose.yml" ]; then
+        deploy_stack "/root/docker-compose.yml" "swarm"
+        if [ $? -ne 0 ]; then
+            log_message "ERROR" "Failed to deploy stack. Exiting."
+            exit 1
+        fi
+    else
+        log_message "ERROR" "docker-compose.yml not found! Exiting."
+        exit 1
+    fi
+    
+    # Check stack status
+    log_message "INFO" "Checking stack status..."
+    check_stack_status "swarm"
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Stack deployment has issues. Please check manually."
+        exit 1
+    fi
+    
+    log_message "INFO" "Deployment completed successfully."
+    exit 0
+}
+
+# Execute the main function
+main

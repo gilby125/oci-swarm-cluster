@@ -1,0 +1,14 @@
+{
+  "domain": "admin-pangolin.throughfire.net",
+  "adminEmail": "admin@throughfire.net",
+  "adminPassword": "tXQ#BaOqZ~{15]2A",
+  "jwtSecret": "3yS2WSVUWgVH0xxevZ2o1J53MxfqM404",
+  "database": {
+    "type": "sqlite",
+    "path": "/data/pangolin.db"
+  },
+  "server": {
+    "port": 3001,
+    "host": "0.0.0.0"
+  }
+}

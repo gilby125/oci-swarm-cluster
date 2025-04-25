@@ -6,6 +6,85 @@ output "lb_public_url" {
   value = format("http://%s", lookup(oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0], "ip_address"))
 }
 
+output "lb_public_ip" {
+  value = lookup(oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0], "ip_address")
+}
+
+output "swarm_manager_public_ip" {
+  value = oci_core_instance.app_instance[0].public_ip
+}
+
+output "swarm_manager_private_ip" {
+  value = oci_core_instance.app_instance[0].private_ip
+}
+
+output "swarm_worker_public_ips" {
+  value = "Worker nodes do not have public IPs. Access them through the manager node or load balancer."
+}
+
+output "swarm_worker_private_ips" {
+  value = [
+    for i in range(1, var.num_nodes) : oci_core_instance.app_instance[i].private_ip
+  ]
+}
+
+output "swarm_node_hostnames" {
+  value = [
+    for i in range(0, var.num_nodes) : oci_core_instance.app_instance[i].hostname_label
+  ]
+}
+
+output "cloudflare_dns_records" {
+  value = local.use_cloudflare && length(cloudflare_dns_record.dns_records) > 0 ? {
+    for k, v in cloudflare_dns_record.dns_records : k => {
+      name    = v.name
+      value   = v.content
+      type    = v.type
+      proxied = v.proxied
+      id      = v.id
+    }
+  } : {}
+  description = "Details of all Cloudflare DNS records managed by this Terraform configuration"
+}
+
+output "dns_validation" {
+  value = <<-EOT
+    DNS VALIDATION SUMMARY
+    ---------------------
+    Load Balancer IP: ${oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0].ip_address}
+
+    ${local.use_cloudflare && length(cloudflare_dns_record.dns_records) > 0 ? "Managed DNS Records:\n    ${join("\n    ", [for k, v in cloudflare_dns_record.dns_records :
+      format("- %s.%s → %s (Proxied: %s)",
+        v.name,
+        var.domain_name,
+        v.content,
+        v.proxied ? "Yes" : "No"
+      )
+    ])}" : "Cloudflare DNS management is not enabled or no records exist."}
+
+    Access URLs:
+    - Portainer: https://portainer.${var.domain_name}
+    - Registry: https://registry.${var.domain_name}
+    - Pangolin Admin: https://admin-pangolin.${var.domain_name}
+
+    NOTE: If you experience DNS issues, ensure all records point to the load balancer IP.
+    If you see duplicate DNS records in Cloudflare, you may need to manually remove them.
+  EOT
+  description = "Summary of DNS configuration and validation information"
+}
+
+output "portainer_url" {
+  value = var.domain_name != "" ? format("https://portainer.%s", var.domain_name) : "Domain name not set"
+}
+
+output "registry_url" {
+  value = var.domain_name != "" ? format("https://registry.%s", var.domain_name) : "Domain name not set"
+}
+
+output "pangolin_admin_url" {
+  value = var.domain_name != "" ? format("https://admin-pangolin.%s", var.domain_name) : "Domain name not set"
+}
+
 output "autonomous_database_password" {
   value = random_string.autonomous_database_admin_password.result
 }
@@ -19,12 +98,56 @@ output "generated_private_key_pem" {
   value = var.generate_public_ssh_key ? tls_private_key.compute_ssh_key.private_key_pem : "No Keys Auto Generated"
 }
 
+output "ssh_connection_strings" {
+  value = {
+    manager = format("ssh -i id_rsa opc@%s", oci_core_instance.app_instance[0].public_ip),
+    workers = "Worker nodes can be accessed through the manager node using their private IPs"
+  }
+}
+
 output "dev" {
   value = "Made with \u2764 by Marcelo Ochoa"
 }
 
 output "comments" {
   value = "The application URL will be unavailable for a few minutes after provisioning, while the application is configured"
+}
+
+output "dns_warning" {
+  value = <<-EOT
+    ⚠️  IMPORTANT DNS INFORMATION ⚠️
+
+    If you're redeploying this infrastructure or updating an existing deployment:
+
+    1. Ensure all DNS records point ONLY to the current load balancer IP: ${oci_load_balancer_load_balancer.oci_swarm_lb.ip_address_details[0].ip_address}
+
+    2. Check for duplicate DNS records in Cloudflare that might point to old IP addresses
+
+    3. If you experience 520 errors from Cloudflare or inconsistent behavior:
+       - Log in to your Cloudflare dashboard
+       - Go to DNS management for ${var.domain_name}
+       - Delete any duplicate A records for the subdomains managed by this deployment
+       - Ensure each subdomain has only ONE A record pointing to the current load balancer IP
+
+    4. After cleaning up DNS records, it may take some time for DNS changes to propagate
+  EOT
+  description = "Warning about potential DNS issues and how to resolve them"
+}
+
+output "pangolin_credentials" {
+  value = <<-EOT
+    🔐 PANGOLIN ADMIN CREDENTIALS 🔐
+
+    Pangolin is now running with a proper login page at:
+    https://admin-pangolin.${var.domain_name}
+
+    Admin Email: admin@${var.domain_name}
+    Admin Password: ${var.pangolin_admin_password != "" ? var.pangolin_admin_password : random_string.pangolin_admin_password.result}
+
+    Please save these credentials securely. You can change the password after logging in.
+  EOT
+  description = "Pangolin admin credentials"
+  sensitive   = true
 }
 
 output "deploy_id" {

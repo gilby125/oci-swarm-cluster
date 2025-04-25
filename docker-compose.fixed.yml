@@ -1,0 +1,252 @@
+version: "3.6"
+
+services:
+    whoami:
+        image: traefik/whoami:v1.6.1
+        deploy:
+            mode: replicated
+            replicas: 1
+            labels:
+                - traefik.enable=true
+                - traefik.docker.network=lb_network
+                - traefik.constraint-label=traefik-public
+                - traefik.http.routers.whoami.rule=Path(`/whoami`)
+                - traefik.http.routers.whoami.entrypoints=https,http
+                - traefik.http.routers.whoami.tls=true
+                - traefik.http.routers.whoami.tls.certresolver=cloudflare
+                - traefik.http.services.whoami.loadbalancer.server.port=80
+        networks:
+            - lb_network
+
+    registry:
+        image: registry:2
+        ports:
+            - 5000:5000
+        networks:
+            - lb_network
+        volumes:
+            - registry:/var/lib/registry
+        deploy:
+            mode: replicated
+            replicas: 1
+            labels:
+                - traefik.enable=true
+                - traefik.docker.network=lb_network
+                - traefik.constraint-label=traefik-public
+                - traefik.http.routers.registry.rule=(Host(`registry.throughfire.net`) && PathPrefix(`/v2/`))
+                - traefik.http.routers.registry-v2.rule=(Host(`v2.registry.throughfire.net`) && PathPrefix(`/v2/`))
+                - traefik.http.routers.registry.entrypoints=https
+                - traefik.http.routers.registry.tls=true
+                - traefik.http.routers.registry.tls.certresolver=cloudflare
+                - traefik.http.routers.registry-v2.entrypoints=https
+                - traefik.http.routers.registry-v2.tls=true
+                - traefik.http.routers.registry-v2.tls.certresolver=cloudflare
+                - traefik.http.services.registry.loadbalancer.server.port=5000
+                - traefik.http.services.registry-v2.loadbalancer.server.port=5000
+                # Add HTTP router for registry to handle redirects
+                - traefik.http.routers.registry-http.rule=(Host(`registry.throughfire.net`) && PathPrefix(`/v2/`))
+                - traefik.http.routers.registry-http.entrypoints=http
+                - traefik.http.middlewares.registry-https-redirect.redirectscheme.scheme=https
+                - traefik.http.routers.registry-http.middlewares=registry-https-redirect
+
+    agent:
+        image: portainer/agent
+        environment:
+            # REQUIRED: Should be equal to the service name prefixed by "tasks." when
+            # deployed inside an overlay network
+            AGENT_CLUSTER_ADDR: tasks.swarm_agent
+            # AGENT_PORT: 9001
+            # LOG_LEVEL: debug
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+            - /var/lib/docker/volumes:/var/lib/docker/volumes
+        networks:
+            - agent_network
+        deploy:
+            mode: global
+            placement:
+                constraints: [node.platform.os == linux]
+
+    portainer:
+        image: portainer/portainer-ce:2.11.1
+        command: -H tcp://tasks.swarm_agent:9001 --tlsskipverify
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock
+            - portainer:/data
+        networks:
+            - agent_network
+            - lb_network
+        deploy:
+            mode: replicated
+            replicas: 1
+            labels:
+                - traefik.enable=true
+                - traefik.docker.network=lb_network
+                - traefik.constraint-label=traefik-public
+                - traefik.http.routers.portainer.rule=(Host(`dev-oci.throughfire.net`) && PathPrefix(`/`))
+                - traefik.http.routers.portainer-v2-11-1.rule=(Host(`v2-11-1.dev-oci.throughfire.net`) && PathPrefix(`/`))
+                - traefik.http.routers.portainer.entrypoints=https
+                - traefik.http.routers.portainer.tls=true
+                - traefik.http.routers.portainer.tls.certresolver=cloudflare
+                - traefik.http.routers.portainer-v2-11-1.entrypoints=https
+                - traefik.http.routers.portainer-v2-11-1.tls=true
+                - traefik.http.routers.portainer-v2-11-1.tls.certresolver=cloudflare
+                - traefik.http.services.portainer.loadbalancer.server.port=9000
+                - traefik.http.services.portainer-v2-11-1.loadbalancer.server.port=9000
+                # Add HTTP router for portainer to handle redirects
+                - traefik.http.routers.portainer-http.rule=(Host(`dev-oci.throughfire.net`) && PathPrefix(`/`))
+                - traefik.http.routers.portainer-http.entrypoints=http
+                - traefik.http.middlewares.portainer-https-redirect.redirectscheme.scheme=https
+                - traefik.http.routers.portainer-http.middlewares=portainer-https-redirect
+
+    traefik:
+        image: traefik:v2.6.1
+        ports:
+            - target: 80
+              published: 80
+              protocol: tcp
+              mode: host
+            - target: 443
+              published: 443
+              protocol: tcp
+              mode: host
+        deploy:
+            mode: global
+            placement:
+                constraints:
+                    - node.role == manager
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - /var/log/traefik:/var/log/traefik:rw
+            - registry:/data
+        configs:
+            - source: traefik_dynamic_conf
+              target: /etc/traefik/dynamic_conf.toml
+        command:
+            - --providers.docker
+            - --providers.docker.constraints=Label(`traefik.constraint-label`, `traefik-public`)
+            - --providers.docker.exposedbydefault=false
+            - --providers.docker.swarmmode
+            - --providers.file.directory=/etc/traefik
+            - --providers.file.watch=true
+            - --entrypoints.http.address=:80
+            - --entrypoints.https.address=:443
+            - --serversTransport.insecureSkipVerify=true
+            - --certificatesresolvers.cloudflare.acme.email=gilby1@gmail.com
+            - --certificatesresolvers.cloudflare.acme.storage=/data/acme.json
+            - --certificatesresolvers.cloudflare.acme.dnschallenge=true
+            - --certificatesresolvers.cloudflare.acme.dnschallenge.provider=cloudflare
+            - --entryPoints.http.forwardedHeaders.trustedIPs=127.0.0.1/32,10.0.0.0/8
+            # Add global HTTP to HTTPS redirect
+            - --entrypoints.http.http.redirections.entryPoint.to=https
+            - --entrypoints.http.http.redirections.entryPoint.scheme=https
+            - --entrypoints.http.http.redirections.entrypoint.permanent=true
+            # Add access logs
+            - --accesslog=true
+            - --accesslog.filepath=/var/log/traefik/access.log
+            - --log=true
+            - --log.filepath=/var/log/traefik/traefik.log
+            - --log.level=DEBUG
+            # Security headers
+            - --entrypoints.https.http.tls=true
+            - --entrypoints.https.http.middlewares=secure-headers@file
+            # API and dashboard configuration
+            - --api.dashboard=true
+            - --api.insecure=false
+            - --ping=true
+        environment:
+            - CLOUDFLARE_EMAIL=gilby1@gmail.com
+            - CLOUDFLARE_DNS_API_TOKEN=SwzDEwUrfmHvXKineeTeA5hoGGBj0X8izELiOAJA
+        networks:
+            - lb_network
+            - traefik-public
+
+    # Pangolin - Secure tunneled reverse proxy with identity and access management
+    pangolin:
+        image: fosrl/pangolin:latest
+        ports:
+            - "3001:3001"
+        environment:
+            - PANGOLIN_DOMAIN=admin-pangolin.throughfire.net
+            - PANGOLIN_ADMIN_EMAIL=admin@throughfire.net
+            - PANGOLIN_ADMIN_PASSWORD=B9D4VcWM62u88Uch7ZoXurupWU560ft7
+            - PANGOLIN_JWT_SECRET=B9D4VcWM62u88Uch7ZoXurupWU560ft7
+            - PANGOLIN_DB_TYPE=sqlite
+            - PANGOLIN_DB_PATH=/data/pangolin.db
+        volumes:
+            - pangolin_data:/data
+        networks:
+            - lb_network
+            - traefik-public
+        deploy:
+            mode: replicated
+            replicas: 1
+            placement:
+                constraints:
+                    - node.role == manager
+            labels:
+                - traefik.enable=true
+                - traefik.docker.network=lb_network
+                - traefik.constraint-label=traefik-public
+                - traefik.http.routers.pangolin.rule=Host(`admin-pangolin.throughfire.net`)
+                - traefik.http.routers.pangolin.entrypoints=https
+                - traefik.http.routers.pangolin.tls=true
+                - traefik.http.routers.pangolin.tls.certresolver=cloudflare
+                - traefik.http.services.pangolin.loadbalancer.server.port=3001
+                # Add HTTP router for pangolin to handle redirects
+                - traefik.http.routers.pangolin-http.rule=Host(`admin-pangolin.throughfire.net`)
+                - traefik.http.routers.pangolin-http.entrypoints=http
+                - traefik.http.middlewares.pangolin-https-redirect.redirectscheme.scheme=https
+                - traefik.http.routers.pangolin-http.middlewares=pangolin-https-redirect
+
+    # Example local service proxy
+    localproxy:
+        image: nginx:alpine
+        networks:
+            - lb_network
+        deploy:
+            labels:
+                - traefik.enable=true
+                - traefik.docker.network=lb_network
+                - traefik.http.routers.localproxy.rule=Host(`local.throughfire.net`)
+                - traefik.http.routers.localproxy-alpine.rule=Host(`alpine.local.throughfire.net`)
+                - traefik.http.routers.localproxy.entrypoints=https
+                - traefik.http.routers.localproxy.tls=true
+                - traefik.http.routers.localproxy.tls.certresolver=cloudflare
+                - traefik.http.routers.localproxy-alpine.entrypoints=https
+                - traefik.http.routers.localproxy-alpine.tls=true
+                - traefik.http.routers.localproxy-alpine.tls.certresolver=cloudflare
+                - traefik.http.services.localproxy.loadbalancer.server.port=80
+                - traefik.http.services.localproxy-alpine.loadbalancer.server.port=80
+                # Add HTTP router for localproxy to handle redirects
+                - traefik.http.routers.localproxy-http.rule=Host(`local.throughfire.net`)
+                - traefik.http.routers.localproxy-http.entrypoints=http
+                - traefik.http.middlewares.localproxy-https-redirect.redirectscheme.scheme=https
+                - traefik.http.routers.localproxy-http.middlewares=localproxy-https-redirect
+        configs:
+            - source: nginx_conf
+              target: /etc/nginx/nginx.conf
+
+volumes:
+  registry:
+    driver: local
+  portainer:
+    driver: local
+  pangolin_data:
+    driver: local
+
+configs:
+  traefik_dynamic_conf:
+    file: ./traefik_dynamic_conf.toml
+  nginx_conf:
+    file: ./nginx.conf
+
+networks:
+  # Use the previously created public network "traefik-public", shared with other
+  # services that need to be publicly available via this Traefik
+  lb_network:
+    external: true
+  agent_network:
+    external: true
+  traefik-public:
+    external: true

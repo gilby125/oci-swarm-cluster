@@ -1,6 +1,6 @@
 # Copyright (c) 2019, 2020 Oracle and/or its affiliates. All rights reserved.
 # Licensed under the Universal Permissive License v 1.0 as shown at http://oss.oracle.com/licenses/upl.
-# 
+#
 
 # Create lifecycle policy to delete temp files
 resource "oci_objectstorage_object_lifecycle_policy" "oci_swarm_deploy_assets_lifecycle_policy" {
@@ -29,8 +29,8 @@ resource "oci_identity_policy" "oci_swarm_basic_policies" {
 }
 
 resource "oci_identity_policy" "storage_admins" {
-  name           = "StorageAdmins.pl"
-  description    = "StorageAdmins.pl"
+  name           = "StorageAdmins-${random_string.deploy_id.result}.pl"
+  description    = "StorageAdmins-${random_string.deploy_id.result}.pl"
   compartment_id = var.compartment_ocid
 
   statements = [

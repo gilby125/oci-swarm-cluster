@@ -1,0 +1,189 @@
+#!/bin/bash
+# Improved deployment script for Docker Swarm
+
+# Source the improved swarm initialization script
+source /root/improved_swarm_init.sh
+
+# Make sure we have the get_ips function
+if ! type get_ips >/dev/null 2>&1; then
+    echo "ERROR: get_ips function not found. Make sure improved_swarm_init.sh is properly sourced."
+    exit 1
+fi
+
+# Function to deploy Docker Swarm stack
+deploy_stack() {
+    local compose_file=$1
+    local stack_name=$2
+    if [ -z "$stack_name" ]; then
+        stack_name="swarm"
+    fi
+
+    log_message "INFO" "Deploying stack $stack_name from $compose_file"
+
+    # Check if the compose file exists
+    if [ ! -f "$compose_file" ]; then
+        log_message "ERROR" "Compose file $compose_file not found"
+        return 1
+    fi
+
+    # Deploy the stack
+    retry_command "docker stack deploy -c $compose_file $stack_name" "Deploy stack $stack_name" 3 10
+
+    if [ $? -ne 0 ]; then
+        log_message "ERROR" "Failed to deploy stack $stack_name"
+        return 1
+    fi
+
+    log_message "INFO" "Stack $stack_name deployed successfully"
+    return 0
+}
+
+# Function to check stack status
+check_stack_status() {
+    local stack_name=$1
+    if [ -z "$stack_name" ]; then
+        stack_name="swarm"
+    fi
+
+    log_message "INFO" "Checking status of stack $stack_name"
+
+    # Check if the stack exists
+    if ! docker stack ls | grep -q "$stack_name"; then
+        log_message "ERROR" "Stack $stack_name does not exist"
+        return 1
+    fi
+
+    # Check if all services are running
+    local services=$(docker stack services $stack_name -q)
+    for service in $services; do
+        local replicas=$(docker service ls --filter "id=$service" --format "{{.Replicas}}")
+        if [[ "$replicas" == *"0/"* ]]; then
+            log_message "ERROR" "Service $service is not running properly: $replicas"
+            return 1
+        fi
+    done
+
+    log_message "INFO" "All services in stack $stack_name are running"
+    return 0
+}
+
+# Function to create Traefik configuration
+create_traefik_config() {
+    log_message "INFO" "Creating Traefik configuration"
+
+    # Create Traefik log directory
+    mkdir -p /var/log/traefik
+    chmod 755 /var/log/traefik
+
+    # Check if traefik_dynamic_conf.toml exists
+    if [ ! -f "/root/traefik_dynamic_conf.toml" ]; then
+        log_message "INFO" "Creating traefik_dynamic_conf.toml"
+        cat > /root/traefik_dynamic_conf.toml << 'EOF'
+[http.middlewares]
+  [http.middlewares.secure-headers.headers]
+    sslRedirect = true
+    stsSeconds = 31536000
+    stsIncludeSubdomains = true
+    stsPreload = true
+    forceSTSHeader = true
+    frameDeny = true
+    customFrameOptionsValue = "SAMEORIGIN"
+    contentTypeNosniff = true
+    browserXssFilter = true
+    customBrowserXSSValue = "1; mode=block"
+    contentSecurityPolicy = "default-src 'self'; frame-ancestors 'self'"
+    referrerPolicy = "same-origin"
+EOF
+    fi
+
+    # Check if nginx.conf exists
+    if [ ! -f "/root/nginx.conf" ]; then
+        log_message "INFO" "Creating nginx.conf"
+        cat > /root/nginx.conf << 'EOF'
+events {
+    worker_connections 1024;
+}
+
+http {
+    server {
+        listen 80;
+        server_name localhost;
+
+        location / {
+            root /usr/share/nginx/html;
+            index index.html;
+        }
+    }
+}
+EOF
+    fi
+
+    log_message "INFO" "Traefik configuration created successfully"
+    return 0
+}
+
+# Main function
+main() {
+    log_message "INFO" "Starting Docker Swarm deployment..."
+
+    # Get the private IP
+    local private_ip
+    private_ip=$(get_ips "primary" "private")
+    if [ -z "$private_ip" ]; then
+        log_message "ERROR" "Failed to get private IP address"
+        exit 1
+    fi
+
+    log_message "INFO" "Private IP: $private_ip"
+
+    # Check if Docker Swarm is already initialized
+    if docker info | grep -q "Swarm: active"; then
+        log_message "INFO" "Swarm is already initialized."
+    else
+        # Initialize Docker Swarm
+        log_message "INFO" "Initializing Docker Swarm..."
+        if ! init_swarm_manager "$private_ip"; then
+            log_message "ERROR" "Failed to initialize Docker Swarm. Exiting."
+            exit 1
+        fi
+    fi
+
+    # Create overlay networks
+    log_message "INFO" "Creating overlay networks..."
+    if ! create_overlay_networks; then
+        log_message "ERROR" "Failed to create overlay networks. Exiting."
+        exit 1
+    fi
+
+    # Create Traefik configuration
+    log_message "INFO" "Creating Traefik configuration..."
+    if ! create_traefik_config; then
+        log_message "ERROR" "Failed to create Traefik configuration. Exiting."
+        exit 1
+    fi
+
+    # Deploy the stack
+    log_message "INFO" "Deploying the stack..."
+    if [ -f "/root/docker-compose.yml" ]; then
+        if ! deploy_stack "/root/docker-compose.yml" "swarm"; then
+            log_message "ERROR" "Failed to deploy stack. Exiting."
+            exit 1
+        fi
+    else
+        log_message "ERROR" "docker-compose.yml not found! Exiting."
+        exit 1
+    fi
+
+    # Check stack status
+    log_message "INFO" "Checking stack status..."
+    if ! check_stack_status "swarm"; then
+        log_message "ERROR" "Stack deployment has issues. Please check manually."
+        exit 1
+    fi
+
+    log_message "INFO" "Deployment completed successfully."
+    exit 0
+}
+
+# Execute the main function
+main
